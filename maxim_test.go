@@ -1,13 +1,14 @@
-package maximgo
+package maxim
 
 import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"maxim-go/logging"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/maxim/maxim-go/logging"
 )
 
 func uuid() string {
@@ -273,7 +274,7 @@ func TestMaximSDKOutOfOrderMessages(t *testing.T) {
 	})
 
 	time.Sleep(30 * time.Second)
-	
+
 	logger.AddResultToGeneration(generationId, map[string]interface{}{
 		"id":      uuid(),
 		"object":  "text_completion",

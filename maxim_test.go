@@ -4,10 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"maxim-go/logging"
 	"os"
 	"testing"
 	"time"
-	"universe/libs/maxim-go/logging"
 )
 
 func uuid() string {
@@ -273,9 +273,9 @@ func TestMaximSDKOutOfOrderMessages(t *testing.T) {
 	})
 
 	time.Sleep(30 * time.Second)
-
+	
 	logger.AddResultToGeneration(generationId, map[string]interface{}{
-		"id":      "10145d10-b2d0-42f6-b69a-9a8311f312b6",
+		"id":      uuid(),
 		"object":  "text_completion",
 		"created": 1720353381,
 		"model":   "gpt-35-turbo",

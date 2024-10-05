@@ -3,11 +3,11 @@ package logging
 import (
 	"fmt"
 	"log"
+	"maxim-go/apis"
+	"maxim-go/internal"
+	"maxim-go/utils"
 	"os"
 	"time"
-	"universe/libs/maxim-go/apis"
-	"universe/libs/maxim-go/internal"
-	"universe/libs/maxim-go/utils"
 )
 
 type writerConfig struct {

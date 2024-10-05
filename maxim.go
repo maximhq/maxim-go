@@ -2,9 +2,9 @@ package maximgo
 
 import (
 	"fmt"
+	"maxim-go/apis"
+	"maxim-go/logging"
 	"sync"
-	"universe/libs/maxim-go/apis"
-	"universe/libs/maxim-go/logging"
 )
 
 type MaximSDKConfig struct {

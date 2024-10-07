@@ -159,7 +159,7 @@ func (w *writer) flush() {
 	}
 	err = w.flushLogs(logs)
 	if err != nil {
-		log.Println("MaximSDK][Error]: error while flushing logs: ", err.Error())
+		log.Println("[MaximSDK][Error]: error while flushing logs: ", err.Error())
 		return
 	}
 	if w.logger != nil {

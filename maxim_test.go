@@ -172,7 +172,7 @@ func TestMaximSDKUnendedSession(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-func TestMaximSDKTraceWithGeneration(t *testing.T) {
+func TestMaximSDKTraceWithGeneration(t *testing.T) {	
 	tc := getConfig()
 	mx := maxim.Init(&maxim.MaximSDKConfig{
 		BaseUrl: &tc.BaseUrl,

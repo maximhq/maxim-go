@@ -168,7 +168,7 @@ func TestMaximSDKUnendedSession(t *testing.T) {
 	sessionConfig := &logging.SessionConfig{Id: sessionId}
 	session := logger.Session(sessionConfig)
 	time.Sleep(100 * time.Millisecond)
-	session.AddTag("test", "seocond test tag")
+	session.AddTag("test", "second test tag")
 	time.Sleep(100 * time.Millisecond)
 }
 

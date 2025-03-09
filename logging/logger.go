@@ -1,5 +1,7 @@
 package logging
 
+import "os"
+
 type LoggerConfig struct {
 	Id                   string
 	AutoFlush            *bool
@@ -20,6 +22,10 @@ func NewLogger(baseUrl string, apiKey string, c *LoggerConfig) *Logger {
 	flushIntervalSeconds := 10
 	if c.FlushIntervalSeconds != nil {
 		flushIntervalSeconds = *c.FlushIntervalSeconds
+	}
+	if c.Id == "" {
+		// We will check if its present in the env
+		c.Id = os.Getenv("MAXIM_LOG_ID")
 	}
 	return &Logger{
 		config: *c,
@@ -221,6 +227,7 @@ func (l *Logger) AddTagToRetrieval(rId, key, value string) {
 	addTag(l.writer, EntityRetrieval, rId, key, value)
 }
 
-func (l *Logger) Cleanup() {
+func (l *Logger) Flush() {
+	l.writer.flush()
 	l.writer.cleanup()
 }

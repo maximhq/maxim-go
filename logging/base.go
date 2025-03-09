@@ -4,11 +4,19 @@ import (
 	"time"
 )
 
+const (
+	ProviderOpenAI    = "openai"
+	ProviderAzure     = "azure"
+	ProviderAnthropic = "anthropic"
+	ProviderBedrock   = "bedrock"
+)
+
 type baseConfig struct {
-	Id     string             `json:"id"`
-	SpanId *string            `json:"spanId,omitempty"`
-	Name   *string            `json:"name,omitempty"`
-	Tags   *map[string]string `json:"tags,omitempty"`
+	Id       string             `json:"id"`
+	SpanId   *string            `json:"spanId,omitempty"`
+	Name     *string            `json:"name,omitempty"`
+	Metadata map[string]string  `json:"metadata,omitempty"`
+	Tags     *map[string]string `json:"tags,omitempty"`
 }
 
 type base struct {

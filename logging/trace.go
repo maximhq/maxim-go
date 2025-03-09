@@ -59,6 +59,14 @@ func (t *Trace) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	return r
 }
 
+func (t *Trace) AddToolCall(c *ToolCallConfig) *ToolCall {
+	tc := newToolCall(c, t.writer)
+	tcData := tc.data()
+	tcData["id"] = c.Id
+	t.commit("add-tool-call", tcData)
+	return tc
+}
+
 func (t *Trace) SetInput(i string) *Trace {
 	t.commit("update", map[string]interface{}{
 		"input": i,

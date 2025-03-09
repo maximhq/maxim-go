@@ -66,7 +66,6 @@ func (t *MaximBedrockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 			// Note: We don't need to create a second reader here since we're just passing through
 			// If needed, create another reader: bodyClone := io.NopCloser(bytes.NewBuffer(bodyBytes))
 			// Print the request body for debugging
-			print("bedrock payload ------", string(bodyBytes))
 			if err := json.Unmarshal(bodyBytes, &body); err != nil {
 				// Log or handle the error as needed
 				// For now, just continue with the execution
@@ -123,10 +122,12 @@ func (t *MaximBedrockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		}
 		// Extract model parameters into a separate map
 		modelParams := make(map[string]interface{})
-		for k, v := range body {
-			if k != "messages" && k != "system" {
-				modelParams[k] = v
-			}
+		if _, ok := body["inferenceConfig"].(map[string]interface{}); ok {
+			modelParams = body["inferenceConfig"].(map[string]interface{})
+		}
+		// Checking it toolConfig is present, if yes we use that as tool
+		if _, ok := body["toolConfig"].([]interface{}); ok {
+			modelParams["tools"] = body["toolConfig"].([]interface{})
 		}
 		if model != "" {
 			generation = trace.AddGeneration(&logging.GenerationConfig{

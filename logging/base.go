@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -8,15 +10,15 @@ const (
 	ProviderOpenAI    = "openai"
 	ProviderAzure     = "azure"
 	ProviderAnthropic = "anthropic"
-	ProviderBedrock   = "bedrock"
+	ProviderBedrock   = "aws"
 )
 
 type baseConfig struct {
-	Id       string             `json:"id"`
-	SpanId   *string            `json:"spanId,omitempty"`
-	Name     *string            `json:"name,omitempty"`
-	Metadata map[string]string  `json:"metadata,omitempty"`
-	Tags     *map[string]string `json:"tags,omitempty"`
+	Id       string                 `json:"id"`
+	SpanId   *string                `json:"spanId,omitempty"`
+	Name     *string                `json:"name,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Tags     *map[string]string     `json:"tags,omitempty"`
 }
 
 type base struct {
@@ -28,6 +30,22 @@ type base struct {
 	startTimestamp time.Time
 	endTimestamp   *time.Time
 	writer         *writer
+}
+
+func sanitizeMetadata(metadata map[string]interface{}) map[string]string {
+	sanitizedMetadata := make(map[string]string)
+	for key, value := range metadata {
+		switch v := value.(type) {
+		case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+			sanitizedMetadata[key] = fmt.Sprintf("%v", v)
+		default:
+			jsonValue, err := json.Marshal(v)
+			if err == nil {
+				sanitizedMetadata[key] = string(jsonValue)
+			}
+		}
+	}
+	return sanitizedMetadata
 }
 
 func newBase(e Entity, id string, c *baseConfig, w *writer) *base {
@@ -57,6 +75,13 @@ func (b *base) AddTag(key, value string) {
 	(*b.tags)[key] = value
 	b.commit("update", map[string]interface{}{
 		"tags": *b.tags,
+	})
+}
+
+func (b *base) AddMetadata(metadata map[string]interface{}) {
+	sanitizedMetadata := sanitizeMetadata(metadata)
+	b.commit("update", map[string]interface{}{
+		"metadata": sanitizedMetadata,
 	})
 }
 

@@ -15,6 +15,7 @@ const (
 	EntityGeneration Entity = "generation"
 	EntityFeedback   Entity = "feedback"
 	EntityRetrieval  Entity = "retrieval"
+	EntityToolCall   Entity = "tool_call"
 )
 
 // CommitLog represents a log entry

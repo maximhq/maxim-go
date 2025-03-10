@@ -22,6 +22,23 @@ type Maxim struct {
 	loggers map[string]*logging.Logger
 }
 
+// Maxim is the main client for the Maxim SDK.
+// It provides access to various Maxim features like logging.
+// The client should be initialized with Init() and cleaned up with Cleanup().
+//
+// Example usage:
+//
+//	config := &maxim.MaximSDKConfig{
+//		ApiKey: "your-api-key",
+//		Debug:  true,
+//	}
+//	client := maxim.Init(config)
+//	defer client.Cleanup()
+//
+//	// Now you can use the client to access Maxim features
+//	logger, err := client.GetLogger(&logging.LoggerConfig{
+//		Id: "your-log-repo-id",
+//	})
 func Init(c *MaximSDKConfig) *Maxim {
 	baseUrl := "https://app.getmaxim.ai"
 	if c.BaseUrl != nil {
@@ -39,6 +56,26 @@ func Init(c *MaximSDKConfig) *Maxim {
 	}
 }
 
+// GetLogger returns a logger instance for the given configuration.
+// It inherits the authentication and debug from Maxim instance.
+//
+// Example usage:
+//
+//	config := &maxim.MaximSDKConfig{
+//		ApiKey: "your-api-key",
+//		Debug:  true,
+//	}
+//	client := maxim.Init(config)
+//	defer client.Cleanup()
+//
+//	logger, err := client.GetLogger(&logging.LoggerConfig{
+//		Id: "your-log-repo-id",
+//	})
+//	if err != nil {
+//		// handle error
+//	}
+//
+// The SDK automatically handles flushing logs when Cleanup() is called.
 func (m *Maxim) GetLogger(c *logging.LoggerConfig) (*logging.Logger, error) {
 	if c.Id == "" {
 		// We will check if its present in the env
@@ -59,6 +96,17 @@ func (m *Maxim) GetLogger(c *logging.LoggerConfig) (*logging.Logger, error) {
 	return m.loggers[c.Id], nil
 }
 
+// Cleanup Maxim SDK state and flushes all logs in all the loggers.
+// It should be called when the application is shutting down to ensure all logs are sent to the server.
+//
+// Example usage:
+//
+//	config := &maxim.MaximSDKConfig{
+//		ApiKey: "your-api-key",
+//		Debug:  true,
+//	}
+//	client := maxim.Init(config)
+//	defer client.Cleanup() // This ensures all logs are flushed before the application exits
 func (m *Maxim) Cleanup() {
 	if m.loggers != nil {
 		var wg sync.WaitGroup

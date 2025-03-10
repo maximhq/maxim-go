@@ -1,9 +1,68 @@
 package logging
 
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+)
+
 type GenerationError struct {
 	Message string  `json:"message"`
 	Code    *string `json:"code,omitempty"`
 	Type    *string `json:"type,omitempty"`
+}
+
+type MaximLLMResult struct {
+	ID      string `json:"id"`
+	Model   string `json:"model"`
+	Created int64  `json:"created"`
+	Choices []struct {
+		Message struct {
+			Role      string                   `json:"role"`
+			Content   string                   `json:"content"`
+			ToolCalls []ChatCompletionToolCall `json:"tool_calls,omitempty"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+type BedrockToolUse struct {
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input"`
+	ID    string                 `json:"toolUseId"`
+}
+
+type BedrockConverseResp struct {
+	Metrics struct {
+		LatencyMs int `json:"latencyMs"`
+	} `json:"metrics"`
+	Output struct {
+		Value *struct {
+			Content []struct {
+				Value interface{} `json:"value"`
+			} `json:"content"`
+			Role string `json:"role"`
+		} `json:"value,omitempty"`
+		Message *struct {
+			Content []struct {
+				Text    string          `json:"text"`
+				ToolUse *BedrockToolUse `json:"toolUse"`
+			} `json:"content"`
+			Role string `json:"role"`
+		} `json:"message,omitempty"`
+	} `json:"output"`
+	StopReason string `json:"stopReason"`
+	Usage      struct {
+		InputTokens  int `json:"inputTokens"`
+		OutputTokens int `json:"outputTokens"`
+		TotalTokens  int `json:"totalTokens"`
+	} `json:"usage"`
 }
 
 type ChatCompletionResult struct {
@@ -31,17 +90,17 @@ type ToolCallFunction struct {
 	Name      string `json:"name"`
 }
 
-type ToolCall struct {
+type ChatCompletionToolCall struct {
 	ID       string           `json:"id"`
 	Function ToolCallFunction `json:"function"`
 	Type     string           `json:"type"`
 }
 
 type ChatCompletionMessage struct {
-	Role         string            `json:"role"`
-	Content      *string           `json:"content"`
-	FunctionCall *ToolCallFunction `json:"function_call,omitempty"`
-	ToolCalls    []ToolCall        `json:"tool_calls,omitempty"`
+	Role         string                   `json:"role"`
+	Content      *string                  `json:"content"`
+	FunctionCall *ToolCallFunction        `json:"function_call,omitempty"`
+	ToolCalls    []ChatCompletionToolCall `json:"tool_calls,omitempty"`
 }
 
 type ChatCompletionChoice struct {
@@ -128,15 +187,15 @@ func (g *Generation) SetModel(m string) {
 	})
 }
 
-func (g *Generation) AddMessages(m []CompletionRequest) {
-	if g.messages == nil {
-		g.messages = make([]CompletionRequest, 0)
-	}
-	for _, msg := range m {
-		g.messages = append(g.messages, msg)
-	}
+func (g *Generation) AddMessage(msg CompletionRequest) {
 	g.commit("update", map[string]interface{}{
-		"messages": g.messages,
+		"messages": []CompletionRequest{msg},
+	})
+}
+
+func (g *Generation) AddMessages(m []CompletionRequest) {
+	g.commit("update", map[string]interface{}{
+		"messages": m,
 	})
 }
 
@@ -147,6 +206,183 @@ func (g *Generation) SetModelParameters(mp map[string]interface{}) {
 	})
 }
 
+func (g *Generation) handleBedrockConverseResult(jsonData []byte) (*MaximLLMResult, error) {
+	var bedrockResp BedrockConverseResp
+	if err := json.Unmarshal(jsonData, &bedrockResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Bedrock completion: %w", err)
+	}
+	resp := MaximLLMResult{}
+	// Set the fields
+	resp.Model = g.model // Bedrock doesn't return model info in the response
+	// Concatenate all content values
+	var fullContent string
+	var toolCalls []ChatCompletionToolCall
+	// Checking for Output.Value else check in Output.Message
+	if bedrockResp.Output.Value != nil {
+		for _, content := range bedrockResp.Output.Value.Content {
+			if str, ok := content.Value.(string); ok {
+				fullContent += str
+			} else if m, ok := content.Value.(map[string]interface{}); ok {
+				if toolCalls == nil {
+					toolCalls = make([]ChatCompletionToolCall, 0)
+				}
+				var args string
+				if input, inputFound := m["Input"].(map[string]interface{}); inputFound {
+					if inputJSON, err := json.Marshal(input); err == nil {
+						args = string(inputJSON)
+					} else {
+						args = "{}"
+					}
+				} else {
+					args = "{}"
+				}
+				toolCalls = append(toolCalls, ChatCompletionToolCall{
+					Type: "function",
+					ID:   fmt.Sprintf("%v", m["ToolUseId"]),
+					Function: ToolCallFunction{
+						Name:      fmt.Sprintf("%v", m["Name"]),
+						Arguments: args,
+					},
+				})
+			}
+		}
+	} else if bedrockResp.Output.Message != nil {
+		for _, content := range bedrockResp.Output.Message.Content {
+			if content.ToolUse != nil {
+				if toolCalls == nil {
+					toolCalls = make([]ChatCompletionToolCall, 0)
+				}
+				var args string
+				if inputJSON, err := json.Marshal(content.ToolUse.Input); err == nil {
+					args = string(inputJSON)
+				} else {
+					// Fallback to empty JSON object if marshaling fails
+					args = "{}"
+				}
+				toolCalls = append(toolCalls, ChatCompletionToolCall{
+					Type: "function",
+					ID:   content.ToolUse.ID,
+					Function: ToolCallFunction{
+						Name:      content.ToolUse.Name,
+						Arguments: args,
+					},
+				})
+				continue
+			}
+			fullContent += content.Text
+		}
+	}
+	// Set the choice with content
+	resp.Choices = make([]struct {
+		Message struct {
+			Role      string                   `json:"role"`
+			Content   string                   `json:"content"`
+			ToolCalls []ChatCompletionToolCall `json:"tool_calls,omitempty"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	}, 1)
+	if bedrockResp.Output.Value != nil {
+		resp.Choices[0].Message.Role = bedrockResp.Output.Value.Role
+	} else if bedrockResp.Output.Message != nil {
+		resp.Choices[0].Message.Role = bedrockResp.Output.Message.Role
+	}
+	if toolCalls != nil {
+		resp.Choices[0].Message.ToolCalls = toolCalls
+		resp.Choices[0].FinishReason = "tool_use"
+	}
+	resp.Choices[0].Message.Content = fullContent
+	resp.Choices[0].FinishReason = bedrockResp.StopReason
+
+	// Set usage information
+	resp.Usage.PromptTokens = bedrockResp.Usage.InputTokens
+	resp.Usage.CompletionTokens = bedrockResp.Usage.OutputTokens
+	resp.Usage.TotalTokens = bedrockResp.Usage.TotalTokens
+
+	// Set creation timestamp
+	resp.Created = time.Now().Unix()
+
+	// Generate an ID if one isn't available
+	resp.ID = fmt.Sprintf("bedrock-%d", time.Now().UnixNano())
+
+	return &resp, nil
+}
+
+// handleOpenAIResult extracts and logs data from an OpenAI completion
+func (g *Generation) handleOpenAIResult(jsonData []byte) (*MaximLLMResult, error) {
+	resp := MaximLLMResult{}
+	if err := json.Unmarshal(jsonData, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal OpenAI completion: %w", err)
+	}
+	// Set the fields
+	return &resp, nil
+}
+
+// handleAnthropicResult extracts and logs data from an Anthropic completion
+func (g *Generation) handleAnthropicResult(jsonData []byte) (*MaximLLMResult, error) {
+	var anthropicResp struct {
+		ID      string `json:"id"`
+		Model   string `json:"model"`
+		Role    string `json:"role"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		StopReason   string `json:"stop_reason"`
+		StopSequence string `json:"stop_sequence"`
+		Usage        struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.Unmarshal(jsonData, &anthropicResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Anthropic completion: %w", err)
+	}
+	resp := MaximLLMResult{}
+	// Set the fields
+	resp.ID = anthropicResp.ID
+	resp.Model = anthropicResp.Model
+
+	// Concatenate all text content
+	var fullContent string
+	for _, content := range anthropicResp.Content {
+		if content.Type == "text" {
+			fullContent += content.Text
+		}
+	}
+
+	// Set the choice with content
+	if len(resp.Choices) == 0 {
+		resp.Choices = make([]struct {
+			Message struct {
+				Role      string                   `json:"role"`
+				Content   string                   `json:"content"`
+				ToolCalls []ChatCompletionToolCall `json:"tool_calls,omitempty"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		}, 1)
+	}
+	resp.Choices[0].Message.Role = anthropicResp.Role
+	resp.Choices[0].Message.Content = fullContent
+	resp.Choices[0].FinishReason = anthropicResp.StopReason
+
+	// Set usage information
+	resp.Usage.PromptTokens = anthropicResp.Usage.InputTokens
+	resp.Usage.CompletionTokens = anthropicResp.Usage.OutputTokens
+	resp.Usage.TotalTokens = anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens
+
+	// Set creation timestamp
+	resp.Created = time.Now().Unix()
+
+	return &resp, nil
+}
+
+// handleAzure extracts and logs data from an Azure OpenAI completion
+func (g *Generation) handleAzure(jsonData []byte, _ time.Duration) (*MaximLLMResult, error) {
+	// Azure OpenAI has the same response format as OpenAI
+	return g.handleOpenAIResult(jsonData)
+}
+
 func (g *Generation) SetMaximPromptID(pId string) {
 	g.maximPromptID = &pId
 	g.commit("update", map[string]interface{}{
@@ -155,8 +391,25 @@ func (g *Generation) SetMaximPromptID(pId string) {
 }
 
 func (g *Generation) SetResult(r interface{}) {
+	var finalResult *MaximLLMResult
+	var err error
+	var jsonData []byte
+	jsonData, err = json.Marshal(r)
+	if err != nil {
+		log.Printf("Failed to marshal result: %v", err)
+		return
+	}
+	// Parsing the result
+	switch g.provider {
+	case ProviderOpenAI:
+		finalResult, err = g.handleOpenAIResult(jsonData)
+	case ProviderAzure:
+		finalResult, err = g.handleOpenAIResult(jsonData)
+	case ProviderBedrock:
+		finalResult, err = g.handleBedrockConverseResult(jsonData)
+	}
 	g.commit("result", map[string]interface{}{
-		"result": r,
+		"result": finalResult,
 	})
 }
 

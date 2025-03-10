@@ -46,6 +46,9 @@ func PushLogs(baseUrl, apiKey, repoId, logs string) MaximApiResponse {
 		return MaximApiResponse{Error: newMaximError(err)}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return MaximApiResponse{Error: newMaximError(fmt.Errorf("unexpected status code: %d", resp.StatusCode))}
+	}
 	var response MaximApiResponse
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
@@ -78,6 +81,9 @@ func DoesLogRepoExists(baseUrl, apiKey, repoId string) MaximApiResponse {
 		return MaximApiResponse{Error: newMaximError(err)}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return MaximApiResponse{Error: newMaximError(fmt.Errorf("unexpected status code: %d", resp.StatusCode))}
+	}
 	var response MaximApiResponse
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {

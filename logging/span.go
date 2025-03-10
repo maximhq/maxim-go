@@ -40,6 +40,14 @@ func (s *Span) AddSubSpan(c *SpanConfig) *Span {
 	return subSpan
 }
 
+func (s *Span) AddToolCall(c *ToolCallConfig) *ToolCall {
+	tc := newToolCall(c, s.writer)
+	tcData := tc.data()
+	tcData["id"] = c.Id
+	s.commit("add-tool-call", tcData)
+	return tc
+}
+
 func (s *Span) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	r := newRetrieval(c, s.writer)
 	rData := r.data()

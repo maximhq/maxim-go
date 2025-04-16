@@ -67,6 +67,14 @@ func (t *Trace) AddToolCall(c *ToolCallConfig) *ToolCall {
 	return tc
 }
 
+func (t *Trace) AddError(c *ErrorConfig) *Error {
+	e := newError(c, t.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	t.commit("add-error", eData)
+	return e
+}
+
 func (t *Trace) SetInput(i string) *Trace {
 	t.commit("update", map[string]interface{}{
 		"input": i,

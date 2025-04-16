@@ -182,6 +182,15 @@ func (l *Logger) AddFeedbackToTrace(traceId string, f *Feedback) {
 	addFeedback(l.writer, EntityTrace, traceId, f)
 }
 
+// AddErrorToTrace adds an error to the specified trace
+func (l *Logger) AddErrorToTrace(traceId string, c *ErrorConfig) *Error {
+	e := newError(c, l.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	l.writer.commit(newCommitLog(EntityTrace, traceId, "add-error", eData))
+	return e
+}
+
 // AddTagToTrace adds a key-value tag to the specified trace
 func (l *Logger) AddTagToTrace(traceId, key, value string) {
 	addTag(l.writer, EntityTrace, traceId, key, value)
@@ -259,6 +268,15 @@ func (l *Logger) AddGenerationToSpan(sId string, c *GenerationConfig) *Generatio
 	gData["id"] = c.Id
 	l.writer.commit(newCommitLog(EntitySpan, sId, "add-generation", gData))
 	return g
+}
+
+// AddErrorToSpan adds an error to the specified span
+func (l *Logger) AddErrorToSpan(sId string, c *ErrorConfig) *Error {
+	e := newError(c, l.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	l.writer.commit(newCommitLog(EntitySpan, sId, "add-error", eData))
+	return e
 }
 
 // AddRetrievalToSpan adds a retrieval entity to the specified span

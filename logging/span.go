@@ -48,6 +48,14 @@ func (s *Span) AddToolCall(c *ToolCallConfig) *ToolCall {
 	return tc
 }
 
+func (s *Span) AddError(c *ErrorConfig) *Error {
+	e := newError(c, s.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	s.commit("add-error", eData)
+	return e
+}
+
 func (s *Span) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	r := newRetrieval(c, s.writer)
 	rData := r.data()

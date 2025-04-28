@@ -82,11 +82,11 @@ func (m *Maxim) GetLogger(c *logging.LoggerConfig) (*logging.Logger, error) {
 		c.Id = os.Getenv("MAXIM_LOG_REPO_ID")
 	}
 	if c.Id == "" {
-		return nil, fmt.Errorf("Logger Repo ID is required. Either set it in the config or environment variable MAXIM_LOG_REPO_ID")
+		return nil, fmt.Errorf("logger Repo ID is required. Either set it in the config or environment variable MAXIM_LOG_REPO_ID")
 	}
 	resp := apis.DoesLogRepoExists(m.baseUrl, m.apiKey, c.Id)
 	if resp.Error != nil {
-		return nil, fmt.Errorf("Repo not found %s", resp.Error.Message)
+		return nil, fmt.Errorf("repo not found %s", resp.Error.Message)
 	}
 	if _, ok := m.loggers[c.Id]; !ok {
 		// Overrides isDebug value from config

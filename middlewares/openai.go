@@ -118,6 +118,12 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 					Message: originalErr.Error(),
 				})
 			} else {
+				openaiResult, err := logging.ParseResult(logging.ProviderOpenAI, "", result)
+				if err != nil {
+					log.Println("[MaximSDK] Error parsing OpenAI response:", err)
+				} else {
+					trace.SetOutput(openaiResult.Choices[0].Message.Content)
+				}
 				generation.SetResult(result)
 			}
 		}

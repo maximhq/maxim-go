@@ -34,6 +34,7 @@ func (t *MaximBedrockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	}
 	var trace *logging.Trace
 	var generation *logging.Generation
+	var model string
 	if logger != nil {
 		contextValues := parseContextValues(req.Context())
 		provider := logging.ProviderBedrock
@@ -45,7 +46,6 @@ func (t *MaximBedrockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		})
 		// Print all headers from req
 		path := req.URL.Path
-		var model string
 		if len(path) > 0 && path[0:7] == "/model/" {
 			parts := strings.Split(path, "/")
 			if len(parts) > 2 {
@@ -164,6 +164,12 @@ func (t *MaximBedrockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 					Message: originalErr.Error(),
 				})
 			} else {
+				br, err := logging.ParseResult(logging.ProviderBedrock, model, result)
+				if err != nil {
+					log.Println("[MaximSDK] Error parsing Bedrock response:", err)
+				} else {
+					trace.SetOutput(br.Choices[0].Message.Content)
+				}
 				generation.SetResult(result)
 			}
 		}

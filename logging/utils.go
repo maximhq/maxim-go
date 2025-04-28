@@ -23,16 +23,7 @@ func uuid() string {
 
 	// Generate random bytes
 	randBytes := make([]byte, 16)
-	_, err := time.Now().UnixNano(), randBytes // Using time as a simple random source
-	if err != nil {
-		// In case of error, use time-based values as fallback
-		t := time.Now().UnixNano()
-		for i := 0; i < 16; i++ {
-			randBytes[i] = byte(t & 0xff)
-			t >>= 8
-		}
-	}
-
+	
 	// Format according to UUID v4 layout
 	for i, offset := 0, 0; i < 16; i++ {
 		switch i {

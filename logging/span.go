@@ -40,6 +40,14 @@ func (s *Span) AddSubSpan(c *SpanConfig) *Span {
 	return subSpan
 }
 
+func (s *Span) AddError(c *ErrorConfig) *Error {
+	e := newError(c, s.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	s.commit("add-error", eData)
+	return e
+}
+
 func (s *Span) AddToolCall(c *ToolCallConfig) *ToolCall {
 	tc := newToolCall(c, s.writer)
 	tcData := tc.data()

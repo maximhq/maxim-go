@@ -59,6 +59,14 @@ func (t *Trace) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	return r
 }
 
+func (t *Trace) AddError(c *ErrorConfig) *Error {
+	e := newError(c, t.writer)
+	eData := e.data()
+	eData["id"] = c.Id
+	t.commit("add-error", eData)
+	return e
+}
+
 func (t *Trace) AddToolCall(c *ToolCallConfig) *ToolCall {
 	tc := newToolCall(c, t.writer)
 	tcData := tc.data()

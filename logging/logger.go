@@ -28,7 +28,14 @@ func NewLogger(baseUrl string, apiKey string, c *LoggerConfig) *Logger {
 	}
 	if c.Id == "" {
 		// We will check if its present in the env
-		c.Id = os.Getenv("MAXIM_LOG_ID")
+		// First case is for backward compatibility
+		if os.Getenv("MAXIM_LOG_ID") != "" {
+			c.Id = os.Getenv("MAXIM_LOG_ID")
+		} else if os.Getenv("MAXIM_LOG_REPO_ID") != "" {
+			c.Id = os.Getenv("MAXIM_LOG_REPO_ID")
+		} else {
+			panic("MAXIM_LOG_REPO_ID environment variable is not set. Either set log repo id it in the LoggerConfig or set environment variable MAXIM_LOG_REPO_ID")
+		}
 	}
 	return &Logger{
 		config: *c,

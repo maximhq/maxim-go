@@ -73,7 +73,13 @@ func (l *Logger) AddTagToSession(sessionId, key, value string) {
 }
 
 // SessionEnd marks the specified session as ended
+// Deprecated: please use EndSession instead, this will be removed in a future version
 func (l *Logger) SessionEnd(sessionId string) {
+	end(l.writer, EntitySession, sessionId)
+}
+
+// EndSession marks the specified session as ended
+func (l *Logger) EndSession(sessionId string) {
 	end(l.writer, EntitySession, sessionId)
 }
 

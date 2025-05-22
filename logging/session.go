@@ -11,13 +11,17 @@ type Session struct {
 }
 
 func newSession(c *SessionConfig, w *writer) *Session {
-	return &Session{
+	s := &Session{
 		base: newBase(EntitySession, c.Id, &baseConfig{
 			Id:   c.Id,
 			Name: c.Name,
 			Tags: c.Tags,
 		}, w),
 	}
+	sData := s.data()
+	sData["id"] = c.Id
+	s.commit("create", sData)
+	return s
 }
 
 func (s *Session) Feedback(f *Feedback) {

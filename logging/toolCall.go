@@ -52,7 +52,7 @@ func (tc *ToolCall) End() {
 	tc.base.End()
 }
 
-func (tc *ToolCall) Data() map[string]interface{} {
+func (tc *ToolCall) data() map[string]interface{} {
 	baseData := tc.base.data()
 	baseData["description"] = tc.Description
 	baseData["args"] = tc.Args

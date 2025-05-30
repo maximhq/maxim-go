@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 )
@@ -63,8 +64,6 @@ type BedrockConverseResp struct {
 		TotalTokens  int `json:"totalTokens"`
 	} `json:"usage"`
 }
-
-
 
 type ChatCompletionResult struct {
 	ID      string                 `json:"id"`
@@ -167,6 +166,11 @@ type Generation struct {
 }
 
 func newGeneration(c *GenerationConfig, w *writer) *Generation {
+	// Validating provider
+	if c.Provider != ProviderOpenAI && c.Provider != ProviderAzure && c.Provider != ProviderBedrock && c.Provider != ProviderAnthropic {
+		fmt.Printf("[MaximSDK] Invalid provider %s, allowed providers are %s, %s, %s, %s\n", c.Provider, ProviderOpenAI, ProviderAzure, ProviderBedrock, ProviderAnthropic)
+		return nil
+	}
 	return &Generation{
 		base: newBase(EntityGeneration, c.Id, &baseConfig{
 			SpanId: c.SpanId,
@@ -207,13 +211,13 @@ func (g *Generation) SetModelParameters(mp map[string]interface{}) {
 	})
 }
 
-func (g *Generation) handleBedrockConverseResult(jsonData []byte) (*MaximLLMResult, error) {	
+func (g *Generation) handleBedrockConverseResult(jsonData []byte) (*MaximLLMResult, error) {
 	return ParseBedrockResult(g.model, jsonData)
 }
 
 // handleOpenAIResult extracts and logs data from an OpenAI completion
 func (g *Generation) handleOpenAIResult(jsonData []byte) (*MaximLLMResult, error) {
-	return ParseOpenAIResult( jsonData)
+	return ParseOpenAIResult(jsonData)
 }
 
 // handleAnthropicResult extracts and logs data from an Anthropic completion
@@ -255,7 +259,29 @@ func (g *Generation) SetResult(r interface{}) {
 		finalResult, err = g.handleAnthropicResult(jsonData)
 	}
 	if err != nil {
-		log.Println("Failed to parse result", err)		
+		log.Println("[MaximSDK] Failed to parse result", err)
+	}
+	if finalResult == nil {
+		log.Println("[MaximSDK] No result to set. Here is the valid format for the result: ")
+		log.Println(`generation.SetResult(map[string]interface{}{
+		"id": uuid.New().String(),
+		"model": "gpt-4o",
+		"created": time.Now().Unix(),
+		"choices": []map[string]interface{}{
+			{
+				"message": map[string]interface{}{
+					"role": "assistant",
+					"content": "Hello, world!",
+				},
+			},
+		},
+		"usage": map[string]interface{}{
+			"prompt_tokens": 10,
+			"completion_tokens": 10,
+			"total_tokens": 20,
+		},
+	})`)
+		return
 	}
 	g.commit("result", map[string]interface{}{
 		"result": finalResult,

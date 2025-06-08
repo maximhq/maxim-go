@@ -24,7 +24,7 @@ func newSession(c *SessionConfig, w *writer) *Session {
 	return s
 }
 
-func (s *Session) Feedback(f *Feedback) {
+func (s *Session) SetFeedback(f *Feedback) {
 	s.commit("add-feedback", f)
 }
 

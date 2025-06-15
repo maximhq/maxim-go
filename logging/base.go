@@ -13,6 +13,7 @@ const (
 	ProviderBedrock   = "aws"
 )
 
+// baseConfig is the configuration for a base entity.
 type baseConfig struct {
 	Id       string                 `json:"id"`
 	SpanId   *string                `json:"spanId,omitempty"`
@@ -21,6 +22,7 @@ type baseConfig struct {
 	Tags     *map[string]string     `json:"tags,omitempty"`
 }
 
+// base is the base entity for all entities.
 type base struct {
 	entity         Entity
 	id             string
@@ -32,6 +34,7 @@ type base struct {
 	writer         *writer
 }
 
+// sanitizeMetadata sanitizes the metadata for a base entity.
 func sanitizeMetadata(metadata map[string]interface{}) map[string]string {
 	sanitizedMetadata := make(map[string]string)
 	for key, value := range metadata {
@@ -48,6 +51,7 @@ func sanitizeMetadata(metadata map[string]interface{}) map[string]string {
 	return sanitizedMetadata
 }
 
+// newBase creates a new base entity.
 func newBase(e Entity, id string, c *baseConfig, w *writer) *base {
 	return &base{
 		entity:         e,
@@ -60,14 +64,17 @@ func newBase(e Entity, id string, c *baseConfig, w *writer) *base {
 	}
 }
 
+// commit commits a new commit log to the writer.
 func (b *base) commit(action string, data interface{}) {
 	b.writer.commit(newCommitLog(b.entity, b.id, action, data))
 }
 
+// Id returns the id of the base entity.
 func (b *base) Id() string {
 	return b.id
 }
 
+// AddTag adds a tag to the base entity.
 func (b *base) AddTag(key, value string) {
 	if b.tags == nil {
 		b.tags = &map[string]string{}
@@ -78,6 +85,7 @@ func (b *base) AddTag(key, value string) {
 	})
 }
 
+// AddMetadata adds metadata to the base entity.
 func (b *base) AddMetadata(metadata map[string]interface{}) {
 	sanitizedMetadata := sanitizeMetadata(metadata)
 	b.commit("update", map[string]interface{}{
@@ -85,6 +93,7 @@ func (b *base) AddMetadata(metadata map[string]interface{}) {
 	})
 }
 
+// End ends the base entity.
 func (b *base) End() {
 	b.endTimestamp = utcNowPtr()
 	b.commit("end", map[string]interface{}{
@@ -92,6 +101,7 @@ func (b *base) End() {
 	})
 }
 
+// data returns the data of the base entity.
 func (b *base) data() map[string]interface{} {
 	data := map[string]interface{}{
 		"startTimestamp": b.startTimestamp,
@@ -113,6 +123,7 @@ func (b *base) data() map[string]interface{} {
 
 // Static methods
 
+// addTag adds a tag to the base entity.
 func addTag(w *writer, entity Entity, id, key, value string) {
 	w.commit(newCommitLog(entity, id, "update", map[string]interface{}{
 		"tags": map[string]string{
@@ -121,6 +132,7 @@ func addTag(w *writer, entity Entity, id, key, value string) {
 	}))
 }
 
+// addEvent adds an event to the base entity.
 func addEvent(w *writer, entity Entity, entityId, eId, event string, tags *map[string]string) {
 	eventData := map[string]interface{}{
 		"id":        eId,
@@ -133,10 +145,12 @@ func addEvent(w *writer, entity Entity, entityId, eId, event string, tags *map[s
 	w.commit(newCommitLog(entity, entityId, "add-event", eventData))
 }
 
+// addFeedback adds feedback to the base entity.
 func addFeedback(w *writer, entity Entity, id string, feedback *Feedback) {
 	w.commit(newCommitLog(entity, id, "add-feedback", feedback))
 }
 
+// end ends the base entity.
 func end(w *writer, entity Entity, id string) {
 	w.commit(newCommitLog(entity, id, "end", map[string]interface{}{
 		"endTimestamp": utcNow(),

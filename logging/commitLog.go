@@ -27,7 +27,7 @@ type CommitLog struct {
 	data     interface{}
 }
 
-// NewCommitLog creates a new CommitLog instance
+// newCommitLog creates a new CommitLog instance (internal use)
 func newCommitLog(entity Entity, entityID, action string, data interface{}) *CommitLog {
 	return &CommitLog{
 		entity:   entity,
@@ -51,4 +51,24 @@ func (cl *CommitLog) Serialize() string {
 		}
 	}
 	return fmt.Sprintf("%s{id=%s,action=%s,data=%s}", cl.entity, cl.entityID, cl.action, string(dataJSON))
+}
+
+// GetEntity returns the entity type of the commit log
+func (cl *CommitLog) GetEntity() Entity {
+	return cl.entity
+}
+
+// GetEntityID returns the entity ID of the commit log
+func (cl *CommitLog) GetEntityID() string {
+	return cl.entityID
+}
+
+// GetAction returns the action of the commit log
+func (cl *CommitLog) GetAction() string {
+	return cl.action
+}
+
+// GetData returns the data of the commit log
+func (cl *CommitLog) GetData() interface{} {
+	return cl.data
 }

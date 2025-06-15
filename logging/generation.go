@@ -238,6 +238,10 @@ func (g *Generation) SetMaximPromptID(pId string) {
 	})
 }
 
+func (g *Generation) Evaluate() *evaluateContainer {
+	return newEvaluateContainer(EntityGeneration, g.Id(), g.writer)
+}
+
 func (g *Generation) SetResult(r interface{}) {
 	var finalResult *MaximLLMResult
 	var err error

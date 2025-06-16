@@ -13,6 +13,18 @@ func utcNowPtr() *time.Time {
 	return &now
 }
 
+func removeDuplicateStrings(slice []string) []string {
+	seen := make(map[string]struct{})
+	unique := make([]string, 0, len(slice))
+	for _, item := range slice {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			unique = append(unique, item)
+		}
+	}
+	return unique
+}
+
 func uuid() string {
 	// Generate a UUID v4 using random values
 	// Based on RFC 4122 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx

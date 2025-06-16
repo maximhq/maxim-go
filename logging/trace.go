@@ -59,6 +59,10 @@ func (t *Trace) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	return r
 }
 
+func (t *Trace) Evaluate() *evaluateContainer {
+	return newEvaluateContainer(EntityTrace, t.Id(), t.writer)
+}
+
 func (t *Trace) AddError(c *ErrorConfig) *Error {
 	e := newError(c, t.writer)
 	eData := e.data()

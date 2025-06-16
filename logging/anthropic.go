@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// ParseAnthropicResult parses a JSON response from Anthropic's API and returns a MaximLLMResult.
 func ParseAnthropicResult(jsonData []byte) (*MaximLLMResult, error) {
 	var anthropicResp struct {
 		ID      string `json:"id"`

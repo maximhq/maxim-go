@@ -22,6 +22,10 @@ func newRetrieval(c *RetrievalConfig, w *writer) *Retrieval {
 	}
 }
 
+func (r *Retrieval) Evaluate() *evaluateContainer {
+	return newEvaluateContainer(EntityRetrieval, r.Id(), r.writer)
+}
+
 func (r *Retrieval) SetInput(query string) {
 	r.commit("update", map[string]interface{}{
 		"input": query,

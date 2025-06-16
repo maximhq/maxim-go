@@ -24,6 +24,10 @@ func newSession(c *SessionConfig, w *writer) *Session {
 	return s
 }
 
+func (s *Session) Evaluate() *evaluateContainer {
+	return newEvaluateContainer(EntitySession, s.Id(), s.writer)
+}
+
 func (s *Session) SetFeedback(f *Feedback) {
 	s.commit("add-feedback", f)
 }

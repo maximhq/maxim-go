@@ -2,7 +2,6 @@ package logging
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 )

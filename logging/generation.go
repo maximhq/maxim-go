@@ -166,11 +166,6 @@ type Generation struct {
 }
 
 func newGeneration(c *GenerationConfig, w *writer) *Generation {
-	// Validating provider
-	if c.Provider != ProviderOpenAI && c.Provider != ProviderAzure && c.Provider != ProviderBedrock && c.Provider != ProviderAnthropic {
-		fmt.Printf("[MaximSDK] Invalid provider %s, allowed providers are %s, %s, %s, %s\n", c.Provider, ProviderOpenAI, ProviderAzure, ProviderBedrock, ProviderAnthropic)
-		return nil
-	}
 	return &Generation{
 		base: newBase(EntityGeneration, c.Id, &baseConfig{
 			SpanId: c.SpanId,

@@ -1,5 +1,6 @@
 package logging
 
+// TraceConfig represents the configuration for a trace
 type TraceConfig struct {
 	Id        string             `json:"id"`
 	SpanId    *string            `json:"spanId,omitempty"`
@@ -8,11 +9,13 @@ type TraceConfig struct {
 	SessionId *string
 }
 
+// Trace represents a trace in the logging system
 type Trace struct {
 	*eventEmitter
 	SessionId *string
 }
 
+// newTrace creates a new trace
 func newTrace(c *TraceConfig, w *writer) *Trace {
 	t := &Trace{
 		eventEmitter: &eventEmitter{
@@ -31,6 +34,7 @@ func newTrace(c *TraceConfig, w *writer) *Trace {
 	return t
 }
 
+// AddGeneration adds a generation to the trace
 func (t *Trace) AddGeneration(c *GenerationConfig) *Generation {
 	g := newGeneration(c, t.writer)
 	gData := g.data()
@@ -39,10 +43,12 @@ func (t *Trace) AddGeneration(c *GenerationConfig) *Generation {
 	return g
 }
 
+// SetFeedback adds a feedback to the trace
 func (t *Trace) SetFeedback(f *Feedback) {
 	t.commit("add-feedback", f)
 }
 
+// AddSpan adds a span to the trace
 func (t *Trace) AddSpan(c *SpanConfig) *Span {
 	s := newSpan(c, t.writer)
 	sData := s.data()
@@ -51,6 +57,7 @@ func (t *Trace) AddSpan(c *SpanConfig) *Span {
 	return s
 }
 
+// AddRetrieval adds a retrieval to the trace
 func (t *Trace) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	r := newRetrieval(c, t.writer)
 	rData := r.data()

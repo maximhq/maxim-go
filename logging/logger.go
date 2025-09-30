@@ -253,9 +253,12 @@ func (l *Logger) AddResultToGeneration(gId string, result interface{}) {
 
 // SetGenerationError sets an error for the specified generation
 func (l *Logger) SetGenerationError(gId string, error *GenerationError) {
-	l.writer.commit(newCommitLog(EntityGeneration, gId, "error", map[string]interface{}{
-		"error": error,
+	l.writer.commit(newCommitLog(EntityGeneration, gId, "result", map[string]interface{}{
+		"result": map[string]interface{}{
+			"error": error,
+		},
 	}))
+	end(l.writer, EntityGeneration, gId)
 }
 
 // EndGeneration marks the specified generation as ended

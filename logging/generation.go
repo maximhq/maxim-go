@@ -288,9 +288,12 @@ func (g *Generation) SetResult(r interface{}) {
 
 func (g *Generation) SetError(err *GenerationError) {
 	g.error = err
-	g.commit("update", map[string]interface{}{
-		"error": g.error,
+	g.commit("result", map[string]interface{}{
+		"result": map[string]interface{}{
+			"error": g.error,
+		},
 	})
+	g.End()
 }
 
 func (g *Generation) data() map[string]interface{} {

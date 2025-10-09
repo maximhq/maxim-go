@@ -7,6 +7,7 @@ import (
 
 	"github.com/maximhq/maxim-go/apis"
 	"github.com/maximhq/maxim-go/logging"
+	"github.com/maximhq/maxim-go/prompt"
 )
 
 type MaximSDKConfig struct {
@@ -94,6 +95,29 @@ func (m *Maxim) GetLogger(c *logging.LoggerConfig) (*logging.Logger, error) {
 		m.loggers[c.Id] = logging.NewLogger(m.baseUrl, m.apiKey, c)
 	}
 	return m.loggers[c.Id], nil
+}
+
+// GetPromptVersion fetches a specific version of a prompt.
+//
+// Parameters:
+//   - versionId: The version ID you want to query.
+//   - promptId: The prompt ID whose versions you want to query.
+//
+// Returns:
+//   - *apis.PromptVersion: The prompt version if successful, or nil with an error.
+//   - error: An error if the request fails.
+//
+// Example usage:
+//
+//	client := maxim.Init(&maxim.MaximSDKConfig{
+//		ApiKey: "your-api-key",
+//	})
+//	promptVersion, err := client.GetPromptVersion("version-id", "prompt-id")
+//	if err != nil {
+//		// handle error
+//	}
+func (m *Maxim) GetPromptVersion(versionId, promptId string) (*apis.PromptVersion, error) {
+	return prompt.GetPromptVersion(m.baseUrl, m.apiKey, versionId, promptId)
 }
 
 // Cleanup Maxim SDK state and flushes all logs in all the loggers.

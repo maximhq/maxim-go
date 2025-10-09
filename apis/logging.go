@@ -7,18 +7,10 @@ import (
 	"strings"
 )
 
-type MaximError struct {
-	Message string `json:"message"`
-}
-
 // MaximApiResponse represents the structure of the response from the Maxim API.
 // It contains an optional Error field which, if present, includes a message describing the error.
 type MaximApiResponse struct {
 	Error *MaximError `json:"error,omitempty"`
-}
-
-func newMaximError(err error) *MaximError {
-	return &MaximError{Message: err.Error()}
 }
 
 // PushLogs sends logs to the specified repository.

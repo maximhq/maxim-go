@@ -52,10 +52,120 @@ type Message struct {
 	OriginalType string         `json:"originalType"`
 }
 
-// MessagePayload contains the role and content of a message
+// MessagePayload holds either a request or result payload
 type MessagePayload struct {
-	Role    string                `json:"role"`
-	Content MessagePayloadContent `json:"content"`
+	RequestPayload *ChoiceMessage
+	ResultPayload  *CompletionResultPayload
+}
+
+// UnmarshalJSON unmarshals the MessagePayload from JSON
+func (m *MessagePayload) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as CompletionRequestPayload first
+	var reqPayload ChoiceMessage
+	if err := json.Unmarshal(data, &reqPayload); err == nil && reqPayload.Role != "" {
+		m.RequestPayload = &reqPayload
+		return nil
+	}
+
+	// Try to unmarshal as CompletionResultPayload
+	var resPayload CompletionResultPayload
+	if err := json.Unmarshal(data, &resPayload); err == nil {
+		m.ResultPayload = &resPayload
+		return nil
+	}
+
+	return fmt.Errorf("failed to unmarshal MessagePayload")
+}
+
+// MarshalJSON marshals the MessagePayload to JSON
+func (m *MessagePayload) MarshalJSON() ([]byte, error) {
+	if m.RequestPayload != nil {
+		return json.Marshal(m.RequestPayload)
+	}
+	return json.Marshal(m.ResultPayload)
+}
+
+// CompletionResultPayload contains the completion result information
+type CompletionResultPayload struct {
+	ID                      string                 `json:"id"`
+	Cost                    Cost                   `json:"cost"`
+	Model                   string                 `json:"model"`
+	Trace                   Trace                  `json:"trace"`
+	Usage                   Usage                  `json:"usage"`
+	Choices                 []Choice               `json:"choices"`
+	Provider                string                 `json:"provider"`
+	ModelParams             map[string]interface{} `json:"modelParams"`
+	VariableBoundRetrievals map[string]interface{} `json:"variableBoundRetrievals"`
+}
+
+// Cost represents token cost information
+type Cost struct {
+	Input  float64 `json:"input"`
+	Total  float64 `json:"total"`
+	Output float64 `json:"output"`
+}
+
+// Trace contains input/output trace information
+type Trace struct {
+	Input  TraceInput  `json:"input"`
+	Output TraceOutput `json:"output"`
+}
+
+// TraceInput contains the input messages for the trace
+type TraceInput struct {
+	Messages []ChoiceMessage `json:"messages"`
+}
+
+// TraceOutput contains the output from the completion
+type TraceOutput struct {
+	ID                string   `json:"id"`
+	Model             string   `json:"model"`
+	Usage             Usage    `json:"usage"`
+	Object            string   `json:"object"`
+	Choices           []Choice `json:"choices"`
+	Created           int64    `json:"created"`
+	ServiceTier       string   `json:"service_tier"`
+	SystemFingerprint string   `json:"system_fingerprint"`
+}
+
+// Usage contains token usage information
+type Usage struct {
+	Latency                 float64                  `json:"latency,omitempty"`
+	TotalTokens             int                      `json:"total_tokens"`
+	PromptTokens            int                      `json:"prompt_tokens"`
+	CompletionTokens        int                      `json:"completion_tokens"`
+	PromptTokensDetails     *PromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+// PromptTokensDetails contains details about prompt tokens
+type PromptTokensDetails struct {
+	AudioTokens  int `json:"audio_tokens"`
+	CachedTokens int `json:"cached_tokens"`
+}
+
+// CompletionTokensDetails contains details about completion tokens
+type CompletionTokensDetails struct {
+	AudioTokens              int `json:"audio_tokens"`
+	ReasoningTokens          int `json:"reasoning_tokens"`
+	AcceptedPredictionTokens int `json:"accepted_prediction_tokens"`
+	RejectedPredictionTokens int `json:"rejected_prediction_tokens"`
+}
+
+// Choice represents a completion choice
+type Choice struct {
+	Index        int           `json:"index"`
+	Message      ChoiceMessage `json:"message"`
+	FinishReason string        `json:"finish_reason"`
+	Logprobs     interface{}   `json:"logprobs"`
+}
+
+// ChoiceMessage represents a message in a choice
+type ChoiceMessage struct {
+	Role        string                `json:"role"`
+	Content     MessagePayloadContent `json:"content"`
+	Refusal     *string               `json:"refusal"`
+	Annotations []interface{}         `json:"annotations,omitempty"`
 }
 
 type MessagePayloadContent struct {
@@ -68,6 +178,7 @@ type MessagePayloadContentBlock struct {
 	Text string `json:"text"`
 }
 
+// UnmarshalJSON unmarshals the MessagePayloadContent from JSON
 func (m *MessagePayloadContent) UnmarshalJSON(data []byte) error {
 	var messageStr string
 	if err := json.Unmarshal(data, &messageStr); err == nil {
@@ -80,6 +191,14 @@ func (m *MessagePayloadContent) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	return fmt.Errorf("failed to unmarshal MessagePayloadContent")
+}
+
+// MarshalJSON marshals the MessagePayloadContent to JSON
+func (m *MessagePayloadContent) MarshalJSON() ([]byte, error) {
+	if m.MessagePayloadContentStr != nil {
+		return json.Marshal(m.MessagePayloadContentStr)
+	}
+	return json.Marshal(m.MessagePayloadContentArray)
 }
 
 // ModelParameters contains the model configuration parameters

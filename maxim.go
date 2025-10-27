@@ -44,6 +44,8 @@ func Init(c *MaximSDKConfig) *Maxim {
 	baseUrl := "https://app.getmaxim.ai"
 	if c.BaseUrl != nil {
 		baseUrl = *c.BaseUrl
+	} else if os.Getenv("MAXIM_BASE_URL") != "" {
+		baseUrl = os.Getenv("MAXIM_BASE_URL")
 	}
 	apiKey := c.ApiKey
 	if c.ApiKey == "" {

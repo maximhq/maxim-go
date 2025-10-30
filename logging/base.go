@@ -11,6 +11,7 @@ const (
 	ProviderAzure     = "azure"
 	ProviderAnthropic = "anthropic"
 	ProviderBedrock   = "aws"
+	ProviderGemini    = "gemini"
 )
 
 // baseConfig is the configuration for a base entity.

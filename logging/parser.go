@@ -24,6 +24,8 @@ func ParseResult(provider, model string, r interface{}) (*MaximLLMResult, error)
 		finalResult, err = ParseBedrockResult(model, jsonData)
 	case ProviderAnthropic:
 		finalResult, err = ParseAnthropicResult(jsonData)
+	case ProviderGemini:
+		finalResult, err = ParseGeminiResult(jsonData)
 	}
 	return finalResult, err
 }

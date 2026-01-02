@@ -26,6 +26,10 @@ func NewLogger(baseUrl string, apiKey string, c *LoggerConfig) *Logger {
 	if c.FlushIntervalSeconds != nil {
 		flushIntervalSeconds = *c.FlushIntervalSeconds
 	}
+	if !c.IsDebug && os.Getenv("MAXIM_LOG_IS_DEBUG") != "" {
+		c.IsDebug = os.Getenv("MAXIM_LOG_IS_DEBUG") == "true" || os.Getenv("MAXIM_LOG_IS_DEBUG") == "1"
+	}
+
 	if c.Id == "" {
 		// We will check if its present in the env
 		// First case is for backward compatibility

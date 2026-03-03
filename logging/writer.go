@@ -11,6 +11,8 @@ import (
 	"github.com/maximhq/maxim-go/utils"
 )
 
+const maxAttachmentRetries = 3
+
 type writerConfig struct {
 	BaseUrl              string
 	ApiKey               string
@@ -21,24 +23,26 @@ type writerConfig struct {
 }
 
 type writer struct {
-	config  *writerConfig
-	queue   *utils.Queue[*CommitLog]
-	mutex   *utils.Mutex
-	ticker  *time.Ticker
-	isDebug bool
-	logsDir string
-	logger  *log.Logger
+	config          *writerConfig
+	queue           *utils.Queue[*CommitLog]
+	attachmentQueue *utils.Queue[*CommitLog]
+	mutex           *utils.Mutex
+	ticker          *time.Ticker
+	isDebug         bool
+	logsDir         string
+	logger          *log.Logger
 }
 
 // NewWriter creates a new Writer instance
 func newWriter(c *writerConfig) *writer {
 	w := &writer{
-		ticker:  time.NewTicker(time.Duration(c.FlushIntervalSeconds) * time.Second),
-		config:  c,
-		logsDir: fmt.Sprintf("%smaxim-sdk/%s/maxim-logs", os.TempDir(), c.RepoId),
-		queue:   utils.NewQueue[*CommitLog](),
-		mutex:   utils.NewMutex(),
-		isDebug: c.IsDebug,
+		ticker:          time.NewTicker(time.Duration(c.FlushIntervalSeconds) * time.Second),
+		config:          c,
+		logsDir:         fmt.Sprintf("%smaxim-sdk/%s/maxim-logs", os.TempDir(), c.RepoId),
+		queue:           utils.NewQueue[*CommitLog](),
+		attachmentQueue: utils.NewQueue[*CommitLog](),
+		mutex:           utils.NewMutex(),
+		isDebug:         c.IsDebug,
 	}
 	if w.isDebug {
 		w.logger = internal.NewDebugLogger()
@@ -141,6 +145,193 @@ func (w *writer) flushLogs(logs []*CommitLog) error {
 	return nil
 }
 
+func (w *writer) getAttachmentKey(entity Entity, entityID string, attachmentData interface{}) string {
+	fileID := getAttachmentID(attachmentData)
+	if fileID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/%s/%s/files/original/%s", w.config.RepoId, entity, entityID, fileID)
+}
+
+func getAttachmentID(attachment interface{}) string {
+	switch a := attachment.(type) {
+	case *FileAttachment:
+		if a == nil {
+			return ""
+		}
+		return a.ID
+	case FileAttachment:
+		return a.ID
+	case *FileDataAttachment:
+		if a == nil {
+			return ""
+		}
+		return a.ID
+	case FileDataAttachment:
+		return a.ID
+	case *UrlAttachment:
+		if a == nil {
+			return ""
+		}
+		return a.ID
+	case UrlAttachment:
+		return a.ID
+	case map[string]interface{}:
+		if id, ok := a["id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+func (w *writer) flushAttachments() {
+	attachments := w.attachmentQueue.DequeueAll()
+	for _, cl := range attachments {
+		w.uploadAttachment(cl)
+	}
+}
+
+func (w *writer) uploadAttachment(cl *CommitLog) {
+	entity := cl.GetEntity()
+	entityID := cl.GetEntityID()
+	attachmentData := cl.GetData()
+	if attachmentData == nil {
+		log.Println("[MaximSDK] Attachment data is not set for log. Skipping upload.")
+		return
+	}
+
+	populated, attachType, err := PopulateAttachmentFields(attachmentData)
+	if err != nil || populated == nil {
+		log.Println("[MaximSDK] Failed to populate attachment fields. Skipping upload.")
+		return
+	}
+
+	key := w.getAttachmentKey(entity, entityID, populated)
+	if key == "" {
+		log.Println("[MaximSDK] Failed to generate attachment key. Skipping upload.")
+		return
+	}
+
+	populated["key"] = key
+
+	switch attachType {
+	case AttachmentTypeFile:
+		w.uploadFileAttachment(entity, entityID, populated)
+	case AttachmentTypeFileData:
+		w.uploadFileDataAttachment(entity, entityID, populated)
+	case AttachmentTypeURL:
+		addLog := newCommitLog(entity, entityID, "add-attachment", populated)
+		w.queue.Enqueue(addLog)
+	default:
+		log.Println("[MaximSDK] Unknown attachment type. Skipping upload.")
+	}
+}
+
+func (w *writer) uploadFileAttachment(entity Entity, entityID string, data map[string]interface{}) {
+	path, _ := data["path"].(string)
+	if path == "" {
+		log.Println("[MaximSDK] Path is not set for file attachment. Skipping upload.")
+		return
+	}
+
+	mimeType, _ := data["mimeType"].(string)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		w.retryOrFailAttachment(entity, entityID, data, "file", err)
+		return
+	}
+
+	size := int64(len(fileData))
+	key, _ := data["key"].(string)
+
+	uploadURL, err := apis.GetUploadUrl(w.config.BaseUrl, w.config.ApiKey, key, mimeType, size)
+	if err != nil {
+		w.retryOrFailAttachment(entity, entityID, data, "file", err)
+		return
+	}
+
+	if err := apis.UploadToSignedUrl(uploadURL, fileData, mimeType); err != nil {
+		w.retryOrFailAttachment(entity, entityID, data, "file", err)
+		return
+	}
+
+	addAttachmentData := w.buildAddAttachmentData(data)
+	addLog := newCommitLog(entity, entityID, "add-attachment", addAttachmentData)
+	w.queue.Enqueue(addLog)
+
+	if w.isDebug && w.logger != nil {
+		w.logger.Printf("[MaximSDK] File uploaded. URL: %s, Mime: %s, Size: %d", uploadURL, mimeType, size)
+	}
+}
+
+func (w *writer) uploadFileDataAttachment(entity Entity, entityID string, data map[string]interface{}) {
+	fileData, ok := data["data"].([]byte)
+	if !ok {
+		log.Println("[MaximSDK] Data is not set for file data attachment. Skipping upload.")
+		return
+	}
+
+	mimeType, _ := data["mimeType"].(string)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	size := int64(len(fileData))
+	key, _ := data["key"].(string)
+
+	uploadURL, err := apis.GetUploadUrl(w.config.BaseUrl, w.config.ApiKey, key, mimeType, size)
+	if err != nil {
+		w.retryOrFailAttachment(entity, entityID, data, "fileData", err)
+		return
+	}
+
+	if err := apis.UploadToSignedUrl(uploadURL, fileData, mimeType); err != nil {
+		w.retryOrFailAttachment(entity, entityID, data, "fileData", err)
+		return
+	}
+
+	addAttachmentData := w.buildAddAttachmentData(data)
+	addLog := newCommitLog(entity, entityID, "add-attachment", addAttachmentData)
+	w.queue.Enqueue(addLog)
+
+	if w.isDebug && w.logger != nil {
+		w.logger.Printf("[MaximSDK] File data uploaded. URL: %s, Mime: %s, Size: %d", uploadURL, mimeType, size)
+	}
+}
+
+func (w *writer) buildAddAttachmentData(data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range data {
+		if k == "path" || k == "data" || k == "retry" {
+			continue
+		}
+		result[k] = v
+	}
+	return result
+}
+
+func (w *writer) retryOrFailAttachment(entity Entity, entityID string, data map[string]interface{}, attachType string, uploadErr error) {
+	retry := 0
+	if r, ok := data["retry"].(float64); ok {
+		retry = int(r)
+	}
+	if r, ok := data["retry"].(int); ok {
+		retry = r
+	}
+
+	if retry < maxAttachmentRetries {
+		data["retry"] = retry + 1
+		retryLog := newCommitLog(entity, entityID, "upload-attachment", data)
+		w.attachmentQueue.Enqueue(retryLog)
+	} else {
+		log.Printf("[MaximSDK] Failed to upload %s attachment after %d retries: %v", attachType, maxAttachmentRetries, uploadErr)
+	}
+}
+
 func (w *writer) flush() {
 	err := w.mutex.Acquire()
 	if err != nil {
@@ -150,6 +341,7 @@ func (w *writer) flush() {
 	if w.logger != nil {
 		w.logger.Println("flushing logs")
 	}
+	w.flushAttachments()
 	logs := w.queue.DequeueAll()
 	if len(logs) == 0 {
 		if w.logger != nil {
@@ -171,7 +363,11 @@ func (w *writer) commit(cl *CommitLog) {
 	if w.logger != nil {
 		w.logger.Println("Committing log: ", cl.Serialize())
 	}
-	w.queue.Enqueue(cl)
+	if cl.GetAction() == "upload-attachment" {
+		w.attachmentQueue.Enqueue(cl)
+	} else {
+		w.queue.Enqueue(cl)
+	}
 }
 
 func (w *writer) cleanup() {

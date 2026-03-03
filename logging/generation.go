@@ -236,6 +236,12 @@ func (g *Generation) Evaluate() *evaluateContainer {
 	return newEvaluateContainer(EntityGeneration, g.Id(), g.writer)
 }
 
+// AddAttachment adds an attachment to this generation.
+// The attachment can be *FileAttachment, *FileDataAttachment, *UrlAttachment, or map[string]interface{}.
+func (g *Generation) AddAttachment(attachment interface{}) {
+	g.commit("upload-attachment", attachment)
+}
+
 func (g *Generation) SetResult(r interface{}) {
 	var finalResult *MaximLLMResult
 	var err error

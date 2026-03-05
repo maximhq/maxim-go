@@ -100,6 +100,11 @@ func (t *Trace) SetOutput(o string) *Trace {
 	return t
 }
 
+// AddAttachment adds an attachment to this trace.
+func (t *Trace) AddAttachment(attachment interface{}) {
+	t.commit("upload-attachment", attachment)
+}
+
 func (t *Trace) data() map[string]interface{} {
 	bData := t.base.data()
 	if t.SessionId != nil {

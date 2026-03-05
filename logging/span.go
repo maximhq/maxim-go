@@ -63,3 +63,8 @@ func (s *Span) AddRetrieval(c *RetrievalConfig) *Retrieval {
 	s.commit("add-retrieval", rData)
 	return r
 }
+
+// AddAttachment adds an attachment to this span.
+func (s *Span) AddAttachment(attachment interface{}) {
+	s.commit("upload-attachment", attachment)
+}

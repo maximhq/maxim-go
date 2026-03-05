@@ -209,6 +209,12 @@ func (l *Logger) AddEventToTrace(traceId, eventId, event string, tags *map[strin
 	addEvent(l.writer, EntityTrace, traceId, eventId, event, tags)
 }
 
+// TraceAddAttachment adds an attachment to the specified trace by ID.
+// The attachment can be *FileAttachment, *FileDataAttachment, *UrlAttachment, or map[string]interface{}.
+func (l *Logger) TraceAddAttachment(traceId string, attachment interface{}) {
+	l.writer.commit(newCommitLog(EntityTrace, traceId, "upload-attachment", attachment))
+}
+
 // EndTrace marks the specified trace as ended
 func (l *Logger) EndTrace(traceId string) {
 	end(l.writer, EntityTrace, traceId)
@@ -270,6 +276,12 @@ func (l *Logger) EndGeneration(gId string) {
 	end(l.writer, EntityGeneration, gId)
 }
 
+// GenerationAddAttachment adds an attachment to the specified generation by ID.
+// The attachment can be *FileAttachment, *FileDataAttachment, *UrlAttachment, or map[string]interface{}.
+func (l *Logger) GenerationAddAttachment(generationId string, attachment interface{}) {
+	l.writer.commit(newCommitLog(EntityGeneration, generationId, "upload-attachment", attachment))
+}
+
 // Span methods
 
 // AddGenerationToSpan adds a generation entity to the specified span
@@ -307,6 +319,12 @@ func (l *Logger) AddTagToSpan(spanId, key, value string) {
 // AddEventToSpan adds an event to the specified span with optional tags
 func (l *Logger) AddEventToSpan(spanId, eventId, event string, tags *map[string]string) {
 	addEvent(l.writer, EntitySpan, spanId, eventId, event, tags)
+}
+
+// SpanAddAttachment adds an attachment to the specified span by ID.
+// The attachment can be *FileAttachment, *FileDataAttachment, *UrlAttachment, or map[string]interface{}.
+func (l *Logger) SpanAddAttachment(spanId string, attachment interface{}) {
+	l.writer.commit(newCommitLog(EntitySpan, spanId, "upload-attachment", attachment))
 }
 
 // EndSpan marks the specified span as ended

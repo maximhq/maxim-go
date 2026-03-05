@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 )
@@ -165,6 +166,11 @@ type Generation struct {
 }
 
 func newGeneration(c *GenerationConfig, w *writer) *Generation {
+	// Validating provider
+	if c.Provider != ProviderOpenAI && c.Provider != ProviderAzure && c.Provider != ProviderBedrock && c.Provider != ProviderAnthropic && c.Provider != ProviderGemini {
+		fmt.Printf("[MaximSDK] Invalid provider %s, allowed providers are %s, %s, %s, %s, %s\n", c.Provider, ProviderOpenAI, ProviderAzure, ProviderBedrock, ProviderAnthropic, ProviderGemini)
+		return nil
+	}
 	return &Generation{
 		base: newBase(EntityGeneration, c.Id, &baseConfig{
 			SpanId: c.SpanId,
@@ -219,6 +225,11 @@ func (g *Generation) handleAnthropicResult(jsonData []byte) (*MaximLLMResult, er
 	return ParseAnthropicResult(jsonData)
 }
 
+// handleGeminiResult extracts and logs data from a Gemini completion
+func (g *Generation) handleGeminiResult(jsonData []byte) (*MaximLLMResult, error) {
+	return ParseGeminiResult(jsonData)
+}
+
 // handleAzure extracts and logs data from an Azure OpenAI completion
 func (g *Generation) handleAzure(jsonData []byte, _ time.Duration) (*MaximLLMResult, error) {
 	// Azure OpenAI has the same response format as OpenAI
@@ -261,6 +272,8 @@ func (g *Generation) SetResult(r interface{}) {
 		finalResult, err = g.handleBedrockConverseResult(jsonData)
 	case ProviderAnthropic:
 		finalResult, err = g.handleAnthropicResult(jsonData)
+	case ProviderGemini:
+		finalResult, err = g.handleGeminiResult(jsonData)
 	}
 	if err != nil {
 		log.Println("[MaximSDK] Failed to parse result", err)

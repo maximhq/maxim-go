@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/maximhq/maxim-go/logging"
+	"github.com/maximhq/maxim-go/schemas"
 )
 
 // getOpenAIKey returns the OpenAI API key from the environment.
@@ -77,7 +78,7 @@ func openAIChatCompletion(t *testing.T, apiKey string, messages []map[string]int
 
 // parseAndValidateResult runs ParseResult for the openai provider and fails
 // the test if parsing returns an error or a nil result.
-func parseAndValidateResult(t *testing.T, result map[string]interface{}, model string) *logging.MaximLLMResult {
+func parseAndValidateResult(t *testing.T, result map[string]interface{}, model string) *schemas.MaximLLMResult {
 	t.Helper()
 	parsed, err := logging.ParseResult("openai", model, result)
 	if err != nil {
@@ -128,7 +129,7 @@ func TestOpenAI_VisionWithUrlAttachment(t *testing.T) {
 		Id:       uuid.New().String(),
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
-		Messages: []logging.CompletionRequest{
+		Messages: []schemas.CompletionRequest{
 			{Role: "user", Content: visionMessages[0]["content"]},
 		},
 	})
@@ -194,7 +195,7 @@ func TestOpenAI_VisionWithFileDataAttachment(t *testing.T) {
 		Id:       uuid.New().String(),
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
-		Messages: []logging.CompletionRequest{
+		Messages: []schemas.CompletionRequest{
 			{Role: "user", Content: visionMessages[0]["content"]},
 		},
 	})
@@ -276,7 +277,7 @@ func TestOpenAI_VisionWithMultipleAttachments(t *testing.T) {
 		Id:       uuid.New().String(),
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
-		Messages: []logging.CompletionRequest{
+		Messages: []schemas.CompletionRequest{
 			{Role: "user", Content: visionMessages[0]["content"]},
 		},
 	})
@@ -336,7 +337,7 @@ func TestOpenAI_VisionWithMapAttachment(t *testing.T) {
 		Id:       uuid.New().String(),
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
-		Messages: []logging.CompletionRequest{
+		Messages: []schemas.CompletionRequest{
 			{Role: "user", Content: visionMessages[0]["content"]},
 		},
 	})
@@ -380,7 +381,7 @@ func TestOpenAI_VisionAttachmentOnError(t *testing.T) {
 		Id:       uuid.New().String(),
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
-		Messages: []logging.CompletionRequest{
+		Messages: []schemas.CompletionRequest{
 			{
 				Role: "user",
 				Content: []map[string]interface{}{
@@ -403,7 +404,7 @@ func TestOpenAI_VisionAttachmentOnError(t *testing.T) {
 	})
 
 	errType := "api_error"
-	gen.SetError(&logging.GenerationError{
+	gen.SetError(&schemas.GenerationError{
 		Message: "Simulated API error for testing",
 		Type:    &errType,
 	})

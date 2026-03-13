@@ -93,6 +93,17 @@ func (b *base) AddMetadata(metadata map[string]interface{}) {
 	})
 }
 
+// AddMetric adds a numeric metric to the base entity.
+// Uses the same flow as Python SDK: commit("update", {"metrics": {name: value}}).
+func (b *base) AddMetric(key string, value float64) {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return
+	}
+	b.commit("update", map[string]interface{}{
+		"metrics": map[string]float64{key: value},
+	})
+}
+
 // End ends the base entity.
 func (b *base) End() {
 	b.endTimestamp = utcNowPtr()
@@ -129,6 +140,17 @@ func addTag(w *writer, entity Entity, id, key, value string) {
 		"tags": map[string]string{
 			key: value,
 		},
+	}))
+}
+
+// addMetric adds a metric to an entity by ID.
+// Uses the same flow as Python SDK: commit("update", {"metrics": {name: value}}).
+func addMetric(w *writer, entity Entity, id, key string, value float64) {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return
+	}
+	w.commit(newCommitLog(entity, id, "update", map[string]interface{}{
+		"metrics": map[string]float64{key: value},
 	}))
 }
 

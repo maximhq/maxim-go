@@ -4,19 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/maximhq/maxim-go/schemas"
 )
 
-func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) {
-	var bedrockResp BedrockConverseResp
+func ParseBedrockResult(model string, jsonData []byte) (*schemas.MaximLLMResult, error) {
+	var bedrockResp schemas.BedrockConverseResp
 	if err := json.Unmarshal(jsonData, &bedrockResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Bedrock completion: %w", err)
 	}
-	resp := MaximLLMResult{}
+	resp := schemas.MaximLLMResult{}
 	// Set the fields
 	resp.Model = model // Bedrock doesn't return model info in the response
 	// Concatenate all content values
 	var fullContent string
-	var toolCalls []ChatCompletionToolCall
+	var toolCalls []schemas.ChatCompletionToolCall
 	// Checking for Output.Value else check in Output.Message
 	if bedrockResp.Output.Value != nil {
 		for _, content := range bedrockResp.Output.Value.Content {
@@ -24,7 +26,7 @@ func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) 
 				fullContent += str
 			} else if m, ok := content.Value.(map[string]interface{}); ok {
 				if toolCalls == nil {
-					toolCalls = make([]ChatCompletionToolCall, 0)
+					toolCalls = make([]schemas.ChatCompletionToolCall, 0)
 				}
 				var args string
 				if input, inputFound := m["Input"].(map[string]interface{}); inputFound {
@@ -36,10 +38,10 @@ func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) 
 				} else {
 					args = "{}"
 				}
-				toolCalls = append(toolCalls, ChatCompletionToolCall{
+				toolCalls = append(toolCalls, schemas.ChatCompletionToolCall{
 					Type: "function",
 					ID:   fmt.Sprintf("%v", m["ToolUseId"]),
-					Function: ToolCallFunction{
+					Function: schemas.ToolCallFunction{
 						Name:      fmt.Sprintf("%v", m["Name"]),
 						Arguments: args,
 					},
@@ -50,7 +52,7 @@ func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) 
 		for _, content := range bedrockResp.Output.Message.Content {
 			if content.ToolUse != nil {
 				if toolCalls == nil {
-					toolCalls = make([]ChatCompletionToolCall, 0)
+					toolCalls = make([]schemas.ChatCompletionToolCall, 0)
 				}
 				var args string
 				if inputJSON, err := json.Marshal(content.ToolUse.Input); err == nil {
@@ -59,10 +61,10 @@ func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) 
 					// Fallback to empty JSON object if marshaling fails
 					args = "{}"
 				}
-				toolCalls = append(toolCalls, ChatCompletionToolCall{
+				toolCalls = append(toolCalls, schemas.ChatCompletionToolCall{
 					Type: "function",
 					ID:   content.ToolUse.ID,
-					Function: ToolCallFunction{
+					Function: schemas.ToolCallFunction{
 						Name:      content.ToolUse.Name,
 						Arguments: args,
 					},
@@ -73,14 +75,7 @@ func ParseBedrockResult(model string, jsonData []byte) (*MaximLLMResult, error) 
 		}
 	}
 	// Set the choice with content
-	resp.Choices = make([]struct {
-		Message struct {
-			Role      string                   `json:"role"`
-			Content   string                   `json:"content"`
-			ToolCalls []ChatCompletionToolCall `json:"tool_calls,omitempty"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	}, 1)
+	resp.Choices = make([]schemas.MaximLLMChoice, 1)
 	if bedrockResp.Output.Value != nil {
 		resp.Choices[0].Message.Role = bedrockResp.Output.Value.Role
 	} else if bedrockResp.Output.Message != nil {

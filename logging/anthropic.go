@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/maximhq/maxim-go/schemas"
 )
 
 // ParseAnthropicResult parses a JSON response from Anthropic's API and returns a MaximLLMResult.
-func ParseAnthropicResult(jsonData []byte) (*MaximLLMResult, error) {
+func ParseAnthropicResult(jsonData []byte) (*schemas.MaximLLMResult, error) {
 	var anthropicResp struct {
 		ID      string `json:"id"`
 		Model   string `json:"model"`
@@ -27,7 +29,7 @@ func ParseAnthropicResult(jsonData []byte) (*MaximLLMResult, error) {
 	if err := json.Unmarshal(jsonData, &anthropicResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Anthropic completion: %w", err)
 	}
-	resp := MaximLLMResult{}
+	resp := schemas.MaximLLMResult{}
 	// Set the fields
 	resp.ID = anthropicResp.ID
 	resp.Model = anthropicResp.Model
@@ -42,14 +44,7 @@ func ParseAnthropicResult(jsonData []byte) (*MaximLLMResult, error) {
 
 	// Set the choice with content
 	if len(resp.Choices) == 0 {
-		resp.Choices = make([]struct {
-			Message struct {
-				Role      string                   `json:"role"`
-				Content   string                   `json:"content"`
-				ToolCalls []ChatCompletionToolCall `json:"tool_calls,omitempty"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason"`
-		}, 1)
+		resp.Choices = make([]schemas.MaximLLMChoice, 1)
 	}
 	resp.Choices[0].Message.Role = anthropicResp.Role
 	resp.Choices[0].Message.Content = fullContent

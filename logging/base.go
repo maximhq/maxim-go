@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -11,6 +12,7 @@ const (
 	ProviderAzure     = "azure"
 	ProviderAnthropic = "anthropic"
 	ProviderBedrock   = "aws"
+	ProviderGemini    = "google"
 )
 
 // baseConfig is the configuration for a base entity.
@@ -144,7 +146,6 @@ func addTag(w *writer, entity Entity, id, key, value string) {
 }
 
 // addMetric adds a metric to an entity by ID.
-// Uses the same flow as Python SDK: commit("update", {"metrics": {name: value}}).
 func addMetric(w *writer, entity Entity, id, key string, value float64) {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return

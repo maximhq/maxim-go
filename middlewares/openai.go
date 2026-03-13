@@ -100,6 +100,7 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 			if err != nil {
 				return nil, err
 			}
+			_ = r.Body.Close()
 			// Create two readers from the bytes
 			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			// Note: We don't need to create a second reader here since we're just passing through
@@ -121,9 +122,11 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 		if payloadMessages, ok := body["messages"].([]interface{}); ok {
 			messages = make([]schemas.CompletionRequest, 0, len(payloadMessages))
 			for _, msg := range payloadMessages {
-				msgMap, ok := msg.(map[string]interface{})
-				if !ok {
-					continue
+				if msgMap, ok := msg.(map[string]interface{}); ok {
+					messages = append(messages, schemas.CompletionRequest{
+						Role:    msgMap["role"].(string),
+						Content: msgMap["content"].(string),
+					})
 				}
 			}
 		}
@@ -161,6 +164,7 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 		// Clone and print the response
 		if resp != nil && resp.Body != nil {
 			respBytes, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 			if err != nil {
 				log.Print("[MaximSDK] Error reading response body:", err)
 			} else {

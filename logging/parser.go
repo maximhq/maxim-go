@@ -2,6 +2,7 @@ package logging
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/maximhq/maxim-go/schemas"
@@ -22,6 +23,9 @@ func ParseResult(provider, model string, r interface{}) (*schemas.MaximLLMResult
 		return ParseBedrockResult(model, jsonData)
 	case ProviderAnthropic:
 		return ParseAnthropicResult(jsonData)
+	case ProviderGemini:
+		return ParseGeminiResult(jsonData)
+	default:
+		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}
-	return nil, nil
 }

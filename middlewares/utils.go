@@ -6,6 +6,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// contextKey is a private type for context keys to avoid collisions with other packages.
+type contextKey string
+
 // Context keys for tags and metrics (used by E2E tests and middleware).
 const (
 	ContextKeyLogger            contextKey = "maxim.logger"

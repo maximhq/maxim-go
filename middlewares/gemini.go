@@ -166,16 +166,21 @@ func MaximGeminiMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 	resp, originalErr := next(r)
 	if logger != nil {
 		var result map[string]interface{}
+		streamRequest := strings.Contains(r.URL.Path, "streamGenerateContent")
 		if resp != nil && resp.Body != nil {
 			respBytes, err := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 			if err != nil {
 				log.Print("[MaximSDK] Error reading response body:", err)
-			} else {
-				resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
 			}
-			if err := json.Unmarshal(respBytes, &result); err != nil {
-				log.Print("[MaximSDK] Error parsing Gemini response:", err)
+			// Always restore body so downstream consumers can read (even if partial)
+			resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
+			if streamRequest && resp.StatusCode < 400 && len(respBytes) > 0 {
+				result = parseGeminiStreamResponse(respBytes, model)
+			} else if err := json.Unmarshal(respBytes, &result); err != nil {
+				if !streamRequest {
+					log.Print("[MaximSDK] Error parsing Gemini response:", err)
+				}
 			}
 		}
 		if generation != nil {
@@ -199,6 +204,92 @@ func MaximGeminiMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 		}
 	}
 	return resp, originalErr
+}
+
+// parseGeminiStreamResponse parses an SSE stream response and returns an aggregated result
+// in the same shape as a non-streaming Gemini generateContent response.
+func parseGeminiStreamResponse(respBytes []byte, model string) map[string]interface{} {
+	var content strings.Builder
+	var functionCallParts []map[string]interface{}
+	var usageMetadata map[string]interface{}
+	var finishReason string
+
+	lines := strings.Split(string(respBytes), "\n")
+	for _, line := range lines {
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if usageMetadata == nil {
+			if u, ok := chunk["usageMetadata"].(map[string]interface{}); ok {
+				usageMetadata = u
+			}
+		}
+		candidates, _ := chunk["candidates"].([]interface{})
+		if len(candidates) == 0 {
+			continue
+		}
+		cand, _ := candidates[0].(map[string]interface{})
+		if fr, ok := cand["finishReason"].(string); ok && fr != "" {
+			finishReason = fr
+		}
+		c, _ := cand["content"].(map[string]interface{})
+		parts, _ := c["parts"].([]interface{})
+		for _, p := range parts {
+			part, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, ok := part["text"].(string); ok && text != "" {
+				content.WriteString(text)
+			}
+			if fc, ok := part["functionCall"].(map[string]interface{}); ok {
+				functionCallParts = append(functionCallParts, map[string]interface{}{
+					"functionCall": fc,
+				})
+			}
+		}
+	}
+	if usageMetadata == nil {
+		usageMetadata = map[string]interface{}{
+			"promptTokenCount":     0,
+			"candidatesTokenCount": 0,
+			"totalTokenCount":      0,
+		}
+	}
+	if finishReason == "" {
+		finishReason = "STOP"
+	}
+	resultParts := []map[string]interface{}{}
+	if content.Len() > 0 {
+		resultParts = append(resultParts, map[string]interface{}{"text": content.String()})
+	}
+	resultParts = append(resultParts, functionCallParts...)
+	if len(resultParts) == 0 {
+		resultParts = append(resultParts, map[string]interface{}{"text": ""})
+	}
+	result := map[string]interface{}{
+		"candidates": []map[string]interface{}{
+			{
+				"content": map[string]interface{}{
+					"parts": resultParts,
+					"role":  "model",
+				},
+				"finishReason": finishReason,
+				"index":        0,
+			},
+		},
+		"usageMetadata": usageMetadata,
+		"modelVersion":  model,
+	}
+	return result
 }
 
 // extractGeminiAPIError extracts API-level errors from the Gemini response.

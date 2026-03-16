@@ -19,7 +19,7 @@ var (
 	baseUrl       string
 	apiKey        string
 	logRepoId     string
-	testImagePath = "/Users/rohanbarde/Downloads/test_image.jpg"
+	testImagePath = "/Users/rohanbarde/Downloads/test_image.jpg" // Add the path to the test image here
 	testImageURL  = "https://www.hollywoodreporter.com/wp-content/uploads/2014/06/optimuskneesstill.jpg?w=2000&h=1126&crop=1"
 )
 

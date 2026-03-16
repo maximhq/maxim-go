@@ -66,6 +66,7 @@ func (t *MaximOpenAIAPITransport) Do(req *http.Request) (*http.Response, error) 
 func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Response, error)) (*http.Response, error) {
 	var resp *http.Response
 	var logger *logging.Logger
+	var body map[string]interface{}
 	// Getting logger
 	if v, ok := r.Context().Value(ContextKeyLogger).(*logging.Logger); ok && v != nil {
 		logger = v
@@ -94,7 +95,7 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 		for k, v := range contextValues.TraceMetrics {
 			trace.AddMetric(k, v)
 		}
-		var body map[string]interface{}
+		body = make(map[string]interface{})
 		if r.Body != nil {
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
@@ -111,6 +112,23 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 				// For now, just continue with the execution
 				log.Print("[MaximSDK] Couldn't parse OpenAI request")
 			}
+			// For streaming requests, add stream_options to request usage in the final chunk
+			if streamVal, ok := body["stream"]; ok {
+				streamOn := false
+				switch v := streamVal.(type) {
+				case bool:
+					streamOn = v
+				case *bool:
+					streamOn = v != nil && *v
+				}
+				if streamOn && body["stream_options"] == nil {
+					body["stream_options"] = map[string]interface{}{"include_usage": true}
+					if modBytes, err := json.Marshal(body); err == nil {
+						r.Body = io.NopCloser(bytes.NewBuffer(modBytes))
+						r.ContentLength = int64(len(modBytes))
+					}
+				}
+			}
 		}
 		// Ensure required fields are present
 		if body == nil {
@@ -125,7 +143,7 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 				if msgMap, ok := msg.(map[string]interface{}); ok {
 					messages = append(messages, schemas.CompletionRequest{
 						Role:    msgMap["role"].(string),
-						Content: msgMap["content"].(string),
+						Content: msgMap["content"],
 					})
 				}
 			}
@@ -161,19 +179,32 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 	resp, originalErr := next(r)
 	if logger != nil {
 		var result map[string]interface{}
+		streamRequest := false
+		if body != nil {
+			if streamVal, ok := body["stream"]; ok {
+				switch v := streamVal.(type) {
+				case bool:
+					streamRequest = v
+				case *bool:
+					streamRequest = v != nil && *v
+				}
+			}
+		}
 		// Clone and print the response
 		if resp != nil && resp.Body != nil {
 			respBytes, err := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 			if err != nil {
 				log.Print("[MaximSDK] Error reading response body:", err)
-			} else {
-				// Create a new reader from the bytes
-				resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
 			}
-			// Parse response bytes into result
-			if err := json.Unmarshal(respBytes, &result); err != nil {
-				log.Print("[MaximSDK] Error parsing OpenAI response:", err)
+			// Always restore body so downstream consumers can read (even if partial)
+			resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
+			if streamRequest && resp.StatusCode < 400 && len(respBytes) > 0 {
+				result = parseOpenAIStreamResponse(respBytes)
+			} else if err := json.Unmarshal(respBytes, &result); err != nil {
+				if !streamRequest {
+					log.Print("[MaximSDK] Error parsing OpenAI response:", err)
+				}
 			}
 		}
 
@@ -187,17 +218,146 @@ func MaximOpenAIMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 				generation.SetError(apiErr)
 				generation.SetResult(result)
 			} else {
-				openaiResult, err := logging.ParseResult(logging.ProviderOpenAI, "", result)
-				if err != nil {
-					log.Println("[MaximSDK] Error parsing OpenAI response:", err)
-				} else {
-					trace.SetOutput(openaiResult.Choices[0].Message.Content)
+				if result != nil {
+					openaiResult, err := logging.ParseResult(logging.ProviderOpenAI, "", result)
+					if err != nil {
+						log.Println("[MaximSDK] Error parsing OpenAI response:", err)
+					} else if len(openaiResult.Choices) > 0 {
+						trace.SetOutput(openaiResult.Choices[0].Message.Content)
+					}
 				}
 				generation.SetResult(result)
 			}
 		}
 	}
 	return resp, originalErr
+}
+
+// parseOpenAIStreamResponse parses an SSE stream response and returns an aggregated result
+// in the same shape as a non-streaming OpenAI chat completion.
+func parseOpenAIStreamResponse(respBytes []byte) map[string]interface{} {
+	type toolCallAcc struct {
+		id        string
+		typ       string
+		name      string
+		arguments strings.Builder
+	}
+	var content strings.Builder
+	var id, model, finishReason string
+	var usage map[string]interface{}
+	toolCallsMap := make(map[int]*toolCallAcc)
+
+	lines := strings.Split(string(respBytes), "\n")
+	for _, line := range lines {
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if id == "" {
+			if s, ok := chunk["id"].(string); ok {
+				id = s
+			}
+		}
+		if model == "" {
+			if s, ok := chunk["model"].(string); ok {
+				model = s
+			}
+		}
+		// Usage is sent in the last chunk when stream_options.include_usage is true; take the latest
+		if u, ok := chunk["usage"].(map[string]interface{}); ok && len(u) > 0 {
+			usage = u
+		}
+		choices, _ := chunk["choices"].([]interface{})
+		if len(choices) == 0 {
+			continue
+		}
+		choice, _ := choices[0].(map[string]interface{})
+		if fr, ok := choice["finish_reason"].(string); ok && fr != "" {
+			finishReason = fr
+		}
+		delta, _ := choice["delta"].(map[string]interface{})
+		if c, ok := delta["content"].(string); ok && c != "" {
+			content.WriteString(c)
+		}
+		if tcs, ok := delta["tool_calls"].([]interface{}); ok {
+			for _, tc := range tcs {
+				tcMap, ok := tc.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				idx := 0
+				if idxVal, ok := tcMap["index"].(float64); ok {
+					idx = int(idxVal)
+				}
+				if _, exists := toolCallsMap[idx]; !exists {
+					toolCallsMap[idx] = &toolCallAcc{typ: "function"}
+				}
+				acc := toolCallsMap[idx]
+				if tcID, ok := tcMap["id"].(string); ok && tcID != "" {
+					acc.id = tcID
+				}
+				if typ, ok := tcMap["type"].(string); ok && typ != "" {
+					acc.typ = typ
+				}
+				if fn, ok := tcMap["function"].(map[string]interface{}); ok {
+					if name, ok := fn["name"].(string); ok && name != "" {
+						acc.name = name
+					}
+					if args, ok := fn["arguments"].(string); ok {
+						acc.arguments.WriteString(args)
+					}
+				}
+			}
+		}
+	}
+	if id == "" {
+		id = "stream"
+	}
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+	message := map[string]interface{}{
+		"role":    "assistant",
+		"content": content.String(),
+	}
+	if len(toolCallsMap) > 0 {
+		toolCalls := make([]map[string]interface{}, len(toolCallsMap))
+		for idx, acc := range toolCallsMap {
+			toolCalls[idx] = map[string]interface{}{
+				"id":   acc.id,
+				"type": acc.typ,
+				"function": map[string]interface{}{
+					"name":      acc.name,
+					"arguments": acc.arguments.String(),
+				},
+			}
+		}
+		message["tool_calls"] = toolCalls
+	}
+	result := map[string]interface{}{
+		"id":    id,
+		"model": model,
+		"choices": []map[string]interface{}{
+			{
+				"index":        0,
+				"message":      message,
+				"finish_reason": finishReason,
+			},
+		},
+	}
+	if usage != nil {
+		result["usage"] = usage
+	} else {
+		result["usage"] = map[string]interface{}{"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+	}
+	return result
 }
 
 // extractOpenAIAPIError extracts API-level errors from the OpenAI response.

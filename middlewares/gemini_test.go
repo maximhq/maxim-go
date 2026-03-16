@@ -133,7 +133,7 @@ func TestMaximGeminiMiddleware_NoLogger_PassesThrough(t *testing.T) {
 		receivedReq = r
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}],"modelVersion":"gemini-pro"}`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}}],"modelVersion":"gemini-pro"}`)),
 		}, nil
 	}
 
@@ -716,7 +716,7 @@ func TestMaximGeminiMiddleware_WithTags_AddsTagsToTraceAndGeneration(t *testing.
 	next := func(r *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}],"modelVersion":"gemini-pro"}`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}}],"modelVersion":"gemini-pro"}`)),
 		}, nil
 	}
 
@@ -772,7 +772,7 @@ func TestMaximGeminiMiddleware_WithMetrics_AddsMetricsToTraceAndGeneration(t *te
 	next := func(r *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}],"modelVersion":"gemini-pro"}`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`{"candidates":[{"content":{"parts":[{"text":"hi"}],"role":"model"}}],"modelVersion":"gemini-pro"}`)),
 		}, nil
 	}
 

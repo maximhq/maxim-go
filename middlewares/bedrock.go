@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream"
+	"github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream/eventstreamapi"
 	"github.com/google/uuid"
 	"github.com/maximhq/maxim-go/logging"
 	"github.com/maximhq/maxim-go/schemas"
@@ -205,17 +207,18 @@ func MaximBedrockMiddleware(req *http.Request, next func(*http.Request) (*http.R
 	resp, originalErr := next(req)
 	if logger != nil {
 		var result map[string]interface{}
+		streamRequest := strings.Contains(req.URL.Path, "converse-stream")
 		if resp != nil && resp.Body != nil {
 			respBytes, err := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 			if err != nil {
 				log.Print("[MaximSDK] Error reading response body:", err)
-			} else {
-				// Create a new reader from the bytes
-				resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
 			}
-			// Parse response bytes into result
-			if err := json.Unmarshal(respBytes, &result); err != nil {
+			// Always restore body so downstream consumers can read (even if partial)
+			resp.Body = io.NopCloser(bytes.NewBuffer(respBytes))
+			if streamRequest && resp.StatusCode < 400 && len(respBytes) > 0 {
+				result = parseBedrockStreamResponse(respBytes, model)
+			} else if err := json.Unmarshal(respBytes, &result); err != nil {
 				log.Print("[MaximSDK] Error parsing Bedrock response:", err)
 			}
 		}
@@ -232,7 +235,7 @@ func MaximBedrockMiddleware(req *http.Request, next func(*http.Request) (*http.R
 				br, err := logging.ParseResult(logging.ProviderBedrock, model, result)
 				if err != nil {
 					log.Println("[MaximSDK] Error parsing Bedrock response:", err)
-				} else {
+				} else if len(br.Choices) > 0 {
 					trace.SetOutput(br.Choices[0].Message.Content)
 				}
 				generation.SetResult(result)
@@ -240,6 +243,145 @@ func MaximBedrockMiddleware(req *http.Request, next func(*http.Request) (*http.R
 		}
 	}
 	return resp, originalErr
+}
+
+// parseBedrockStreamResponse parses an AWS EventStream response from ConverseStream
+// and returns an aggregated result in the same shape as a non-streaming Converse response.
+func parseBedrockStreamResponse(respBytes []byte, _ string) map[string]interface{} {
+	type toolUseAcc struct {
+		id    string
+		name  string
+		input strings.Builder
+	}
+	var content strings.Builder
+	var stopReason string
+	var usage map[string]interface{}
+	// blockIndex -> toolUseAcc for in-progress tool use blocks
+	toolUseMap := make(map[int]*toolUseAcc)
+	// completed tool use blocks in order
+	var toolUseBlocks []*toolUseAcc
+
+	decoder := eventstream.NewDecoder()
+	reader := bytes.NewReader(respBytes)
+	payloadBuf := make([]byte, 10*1024)
+
+	for {
+		msg, err := decoder.Decode(reader, payloadBuf)
+		if err != nil {
+			break
+		}
+		messageType := msg.Headers.Get(eventstreamapi.MessageTypeHeader)
+		if messageType == nil {
+			continue
+		}
+		if messageType.String() != eventstreamapi.EventMessageType {
+			continue
+		}
+		eventType := msg.Headers.Get(eventstreamapi.EventTypeHeader)
+		if eventType == nil || len(msg.Payload) == 0 {
+			continue
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			continue
+		}
+		switch strings.ToLower(eventType.String()) {
+		case "contentblockstart":
+			blockIdx := 0
+			if idxVal, ok := payload["contentBlockIndex"].(float64); ok {
+				blockIdx = int(idxVal)
+			}
+			if start, ok := payload["start"].(map[string]interface{}); ok {
+				if tu, ok := start["toolUse"].(map[string]interface{}); ok {
+					acc := &toolUseAcc{}
+					if id, ok := tu["toolUseId"].(string); ok {
+						acc.id = id
+					}
+					if name, ok := tu["name"].(string); ok {
+						acc.name = name
+					}
+					toolUseMap[blockIdx] = acc
+				}
+			}
+		case "contentblockdelta":
+			blockIdx := 0
+			if idxVal, ok := payload["contentBlockIndex"].(float64); ok {
+				blockIdx = int(idxVal)
+			}
+			delta, _ := payload["delta"].(map[string]interface{})
+			if delta == nil {
+				continue
+			}
+			if text, ok := delta["text"].(string); ok && text != "" {
+				content.WriteString(text)
+			}
+			if tu, ok := delta["toolUse"].(map[string]interface{}); ok {
+				if acc, exists := toolUseMap[blockIdx]; exists {
+					if input, ok := tu["input"].(string); ok {
+						acc.input.WriteString(input)
+					}
+				}
+			}
+		case "contentblockstop":
+			blockIdx := 0
+			if idxVal, ok := payload["contentBlockIndex"].(float64); ok {
+				blockIdx = int(idxVal)
+			}
+			if acc, exists := toolUseMap[blockIdx]; exists {
+				toolUseBlocks = append(toolUseBlocks, acc)
+				delete(toolUseMap, blockIdx)
+			}
+		case "messagestop":
+			if sr, ok := payload["stopReason"].(string); ok {
+				stopReason = sr
+			}
+		case "metadata":
+			if u, ok := payload["usage"].(map[string]interface{}); ok {
+				usage = u
+			}
+		}
+	}
+
+	if stopReason == "" {
+		stopReason = "end_turn"
+	}
+	contentBlocks := []map[string]interface{}{}
+	if content.Len() > 0 {
+		contentBlocks = append(contentBlocks, map[string]interface{}{"text": content.String()})
+	}
+	for _, acc := range toolUseBlocks {
+		var inputVal interface{}
+		if err := json.Unmarshal([]byte(acc.input.String()), &inputVal); err != nil {
+			inputVal = acc.input.String()
+		}
+		contentBlocks = append(contentBlocks, map[string]interface{}{
+			"toolUse": map[string]interface{}{
+				"toolUseId": acc.id,
+				"name":      acc.name,
+				"input":     inputVal,
+			},
+		})
+	}
+	if len(contentBlocks) == 0 {
+		contentBlocks = append(contentBlocks, map[string]interface{}{"text": ""})
+	}
+	if usage == nil {
+		usage = map[string]interface{}{
+			"inputTokens":  0,
+			"outputTokens": 0,
+			"totalTokens":  0,
+		}
+	}
+	return map[string]interface{}{
+		"output": map[string]interface{}{
+			"message": map[string]interface{}{
+				"content": contentBlocks,
+				"role":    "assistant",
+			},
+		},
+		"stopReason": stopReason,
+		"usage":      usage,
+	}
 }
 
 // extractBedrockAPIError extracts API-level errors from the Bedrock response.

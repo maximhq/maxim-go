@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/maximhq/maxim-go/logging"
 )
 
@@ -897,7 +898,7 @@ func TestMaximGeminiMiddleware_ContextValues(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	ctx := context.WithValue(req.Context(), ContextKeyLogger, logger)
-	ctx = context.WithValue(ctx, ContextKeyTraceId, "custom-trace-123")
+	ctx = context.WithValue(ctx, ContextKeyTraceId, uuid.NewString())
 	ctx = context.WithValue(ctx, ContextKeyTraceName, "CustomTrace")
 	ctx = context.WithValue(ctx, ContextKeyGenerationName, "CustomGen")
 	req = req.WithContext(ctx)

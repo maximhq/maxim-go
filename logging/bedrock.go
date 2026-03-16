@@ -3,6 +3,7 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/maximhq/maxim-go/schemas"
@@ -14,8 +15,10 @@ func ParseBedrockResult(model string, jsonData []byte) (*schemas.MaximLLMResult,
 		return nil, fmt.Errorf("failed to unmarshal Bedrock completion: %w", err)
 	}
 	resp := schemas.MaximLLMResult{}
+
 	// Set the fields
-	resp.Model = model // Bedrock doesn't return model info in the response
+	// Strip "global." prefix if present (e.g. cross-region inference profile)
+	resp.Model = strings.TrimPrefix(model, "global.") // Bedrock doesn't return model info in the response
 	// Concatenate all content values
 	var fullContent string
 	var toolCalls []schemas.ChatCompletionToolCall

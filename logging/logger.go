@@ -1,6 +1,10 @@
 package logging
 
-import "os"
+import (
+	"os"
+
+	"github.com/maximhq/maxim-go/schemas"
+)
 
 // LoggerConfig contains configuration parameters for the Logger
 type LoggerConfig struct {
@@ -204,6 +208,11 @@ func (l *Logger) AddTagToTrace(traceId, key, value string) {
 	addTag(l.writer, EntityTrace, traceId, key, value)
 }
 
+// AddMetricToTrace adds a numeric metric to the specified trace
+func (l *Logger) AddMetricToTrace(traceId, key string, value float64) {
+	addMetric(l.writer, EntityTrace, traceId, key, value)
+}
+
 // AddEventToTrace adds an event to the specified trace with optional tags
 func (l *Logger) AddEventToTrace(traceId, eventId, event string, tags *map[string]string) {
 	addEvent(l.writer, EntityTrace, traceId, eventId, event, tags)
@@ -230,9 +239,9 @@ func (l *Logger) SetModelToGeneration(gId, model string) {
 }
 
 // AddMessageToGeneration adds a message to the specified generation
-func (l *Logger) AddMessageToGeneration(gId string, message CompletionRequest) {
+func (l *Logger) AddMessageToGeneration(gId string, message schemas.CompletionRequest) {
 	l.writer.commit(newCommitLog(EntityGeneration, gId, "update", map[string]interface{}{
-		"messages": []CompletionRequest{message},
+		"messages": []schemas.CompletionRequest{message},
 	}))
 }
 
@@ -246,6 +255,11 @@ func (l *Logger) SetModelParametersForGeneration(gId string, params map[string]i
 // AddTagToGeneration adds a key-value tag to the specified generation
 func (l *Logger) AddTagToGeneration(gId, key, value string) {
 	addTag(l.writer, EntityGeneration, gId, key, value)
+}
+
+// AddMetricToGeneration adds a numeric metric to the specified generation
+func (l *Logger) AddMetricToGeneration(gId, key string, value float64) {
+	addMetric(l.writer, EntityGeneration, gId, key, value)
 }
 
 // AddEventToGeneration adds an event to the specified generation with optional tags
@@ -262,7 +276,7 @@ func (l *Logger) AddResultToGeneration(gId string, result interface{}) {
 }
 
 // SetGenerationError sets an error for the specified generation
-func (l *Logger) SetGenerationError(gId string, error *GenerationError) {
+func (l *Logger) SetGenerationError(gId string, error *schemas.GenerationError) {
 	l.writer.commit(newCommitLog(EntityGeneration, gId, "result", map[string]interface{}{
 		"result": map[string]interface{}{
 			"error": error,

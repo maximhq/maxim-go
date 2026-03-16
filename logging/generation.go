@@ -91,6 +91,10 @@ func (g *Generation) handleAzure(jsonData []byte, _ time.Duration) (*schemas.Max
 	return g.handleOpenAIResult(jsonData)
 }
 
+func (g *Generation) handleGeminiResult(jsonData []byte) (*schemas.MaximLLMResult, error) {
+	return ParseGeminiResult(jsonData)
+}
+
 func (g *Generation) SetMaximPromptID(pId string) {
 	g.maximPromptID = &pId
 	g.commit("update", map[string]interface{}{
@@ -127,6 +131,8 @@ func (g *Generation) SetResult(r interface{}) {
 		finalResult, err = g.handleBedrockConverseResult(jsonData)
 	case ProviderAnthropic:
 		finalResult, err = g.handleAnthropicResult(jsonData)
+	case ProviderGemini:
+		finalResult, err = g.handleGeminiResult(jsonData)
 	}
 	if err != nil {
 		log.Println("[MaximSDK] Failed to parse result", err)

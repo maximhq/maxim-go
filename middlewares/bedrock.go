@@ -116,6 +116,7 @@ func MaximBedrockMiddleware(req *http.Request, next func(*http.Request) (*http.R
 			if err != nil {
 				return nil, err
 			}
+			_ = req.Body.Close()
 			// Create two readers from the bytes
 			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			// Note: We don't need to create a second reader here since we're just passing through
@@ -206,6 +207,7 @@ func MaximBedrockMiddleware(req *http.Request, next func(*http.Request) (*http.R
 		var result map[string]interface{}
 		if resp != nil && resp.Body != nil {
 			respBytes, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 			if err != nil {
 				log.Print("[MaximSDK] Error reading response body:", err)
 			} else {

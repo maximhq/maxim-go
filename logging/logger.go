@@ -267,10 +267,15 @@ func (l *Logger) AddEventToGeneration(gId, eventId, event string, tags *map[stri
 	addEvent(l.writer, EntityGeneration, gId, eventId, event, tags)
 }
 
-// AddResultToGeneration adds a result to the specified generation and marks it as ended
+// AddResultToGeneration adds a result to the specified generation and marks it as ended.
 func (l *Logger) AddResultToGeneration(gId string, result interface{}) {
+	var payload interface{} = result
+	if img, ok := isImageGenerationResult(result); ok {
+		commitImageGenerationAttachments(l, gId, img)
+		payload = imageGenerationResultToMaximLLMResult(img)
+	}
 	l.writer.commit(newCommitLog(EntityGeneration, gId, "result", map[string]interface{}{
-		"result": result,
+		"result": payload,
 	}))
 	end(l.writer, EntityGeneration, gId)
 }

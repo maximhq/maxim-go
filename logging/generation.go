@@ -156,6 +156,11 @@ func (g *Generation) SetResult(r interface{}) {
 			"completion_tokens": 10,
 			"total_tokens": 20,
 		},
+		"cost": map[string]interface{}{ // optional if you want to override the cost
+			"input": 0.0,
+			"output": 0.0,
+			"total": 0.0,
+		},
 	})`)
 		return
 	}

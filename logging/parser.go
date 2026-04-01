@@ -15,15 +15,13 @@ func ParseResult(provider, model string, r interface{}) (*schemas.MaximLLMResult
 		return nil, err
 	}
 	switch provider {
-	case ProviderOpenAI:
-		return ParseOpenAIResult(jsonData)
-	case ProviderAzure:
+	case ProviderOpenAI, ProviderAzure:
 		return ParseOpenAIResult(jsonData)
 	case ProviderBedrock:
 		return ParseBedrockResult(model, jsonData)
 	case ProviderAnthropic:
 		return ParseAnthropicResult(jsonData)
-	case ProviderGemini:
+	case ProviderGemini, ProviderVertex:
 		return ParseGeminiResult(jsonData)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)

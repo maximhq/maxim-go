@@ -131,7 +131,7 @@ func (g *Generation) SetResult(r interface{}) {
 		finalResult, err = g.handleBedrockConverseResult(jsonData)
 	case ProviderAnthropic:
 		finalResult, err = g.handleAnthropicResult(jsonData)
-	case ProviderGemini:
+	case ProviderGemini, ProviderVertex:
 		finalResult, err = g.handleGeminiResult(jsonData)
 	}
 	if err != nil {

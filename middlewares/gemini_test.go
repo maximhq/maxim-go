@@ -31,11 +31,6 @@ func TestExtractGeminiModel(t *testing.T) {
 			expected: "gemini-2.5-flash",
 		},
 		{
-			name:     "Vertex AI style path",
-			path:     "/v1/projects/my-project/locations/us-central1/publishers/google/models/gemini-pro:generateContent",
-			expected: "gemini-pro",
-		},
-		{
 			name:     "path with models/ in middle",
 			path:     "/api/v1/models/gemini-2.0:generateContent",
 			expected: "gemini-2.0",

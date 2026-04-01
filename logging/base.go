@@ -13,6 +13,7 @@ const (
 	ProviderAnthropic = "anthropic"
 	ProviderBedrock   = "aws"
 	ProviderGemini    = "google"
+	ProviderVertex    = "vertex"
 )
 
 // baseConfig is the configuration for a base entity.

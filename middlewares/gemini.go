@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -61,8 +62,8 @@ func MaximGeminiMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 	var trace *logging.Trace
 	var generation *logging.Generation
 	var model string
+	provider := logging.ProviderGemini
 	if logger != nil {
-		provider := logging.ProviderGemini
 		if r.Context().Value(ContextKeyProvider) != nil {
 			provider = r.Context().Value(ContextKeyProvider).(string)
 		}
@@ -78,7 +79,11 @@ func MaximGeminiMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 		for k, v := range contextValues.TraceMetrics {
 			trace.AddMetric(k, v)
 		}
-		model = extractGeminiModel(r.URL.Path)
+		if provider == logging.ProviderVertex {
+			model = extractVertexModel(r.URL.Path)
+		} else {
+			model = extractGeminiModel(r.URL.Path)
+		}
 		var body map[string]interface{}
 		if r.Body != nil {
 			bodyBytes, err := io.ReadAll(r.Body)
@@ -193,7 +198,7 @@ func MaximGeminiMiddleware(r *http.Request, next func(*http.Request) (*http.Resp
 				generation.SetError(apiErr)
 				generation.SetResult(result)
 			} else {
-				gr, err := logging.ParseResult(logging.ProviderGemini, model, result)
+				gr, err := logging.ParseResult(provider, model, result)
 				if err != nil {
 					log.Println("[MaximSDK] Error parsing Gemini response:", err)
 				} else if len(gr.Choices) > 0 {
@@ -227,10 +232,10 @@ func parseGeminiStreamResponse(respBytes []byte, model string) map[string]interf
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			continue
 		}
-		if usageMetadata == nil {
-			if u, ok := chunk["usageMetadata"].(map[string]interface{}); ok {
-				usageMetadata = u
-			}
+		// Always overwrite — Gemini sends usageMetadata on every chunk but only the
+		// last chunk contains the final cumulative token counts.
+		if u, ok := chunk["usageMetadata"].(map[string]interface{}); ok {
+			usageMetadata = u
 		}
 		candidates, _ := chunk["candidates"].([]interface{})
 		if len(candidates) == 0 {
@@ -468,6 +473,25 @@ func attachmentFromFileData(partMap map[string]interface{}) *logging.UrlAttachme
 		Type: logging.AttachmentTypeURL,
 		URL:  uriStr,
 	}
+}
+
+func extractVertexModel(path string) string {
+	// Extract publisher from path: /v1/projects/{p}/locations/{l}/publishers/{pub}/models/{m}:{action}
+	publisher := "google"
+	if pubIdx := strings.Index(path, "publishers/"); pubIdx >= 0 {
+		pubPart := path[pubIdx+11:] // len("publishers/") = 11
+		if slash := strings.Index(pubPart, "/"); slash >= 0 {
+			publisher = pubPart[:slash]
+		}
+	}
+	if idx := strings.Index(path, "models/"); idx >= 0 {
+		modelPart := path[idx+7:] // len("models/") = 7
+		if colon := strings.Index(modelPart, ":"); colon >= 0 {
+			return fmt.Sprintf("publishers/%s/models/%s", publisher, modelPart[:colon])
+		}
+		return fmt.Sprintf("publishers/%s/models/%s", publisher, modelPart)
+	}
+	return ""
 }
 
 // extractGeminiModel extracts the model name from the Gemini API URL path.
